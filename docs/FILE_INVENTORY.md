@@ -1,6 +1,6 @@
 # AI Verify 文件整理索引
 
-> 更新日期：2026-07-09
+> 更新日期：2026-07-10
 
 本文按用途整理 `ai-verify/` 下的项目文件，帮助后续开发时快速定位入口、核心模块、测试和本地产物。
 
@@ -130,8 +130,9 @@ ai-verify/
 
 | 文件 | 作用 |
 | --- | --- |
-| `docs/CURSOR_AUTO_USAGE.md` | Cursor Auto Usage 的完整实施规划，当前状态为待实施。 |
+| `docs/CURSOR_AUTO_USAGE.md` | Cursor Auto Usage 的数据源、置信度、隐私边界与实施规划；其中阶段状态已落后于现有代码。 |
 | `docs/FILE_INVENTORY.md` | 本文件，整理当前项目文件职责与维护边界。 |
+| `docs/PROJECT_STATUS.md` | 当前阶段、验证结果、产品决策、关键边界与下一会话执行入口。 |
 
 ## 本地产物
 

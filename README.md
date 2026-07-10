@@ -121,6 +121,7 @@ python -m build
 ```
 
 文件职责索引见 [`docs/FILE_INVENTORY.md`](docs/FILE_INVENTORY.md)。
+当前阶段状态与下一会话交接见 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)。
 
 ## License
 

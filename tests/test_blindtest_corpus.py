@@ -228,6 +228,63 @@ def test_hook_model_id_outranks_structured_log(tmp_path):
     assert sample.features.get("code_present") == 1.0
 
 
+def test_build_corpus_hook_aware_timestamp_with_naive_logs(tmp_path):
+    """hook received_at 带时区时不得与 structured log naive ts 混排崩溃。"""
+    projects = tmp_path / "projects"
+    logs = tmp_path / "logs"
+    _write_transcript(
+        projects,
+        "conv-tz",
+        [
+            (
+                "<timestamp>Friday, Jul 3, 2026, 10:12 AM (UTC+8)</timestamp>\nq",
+                [{"text": "answer with ```python\nprint(1)\n```"}],
+            )
+        ],
+    )
+    _write_structured_log(
+        logs,
+        [
+            (
+                "2026-07-03 10:12:05.000",
+                "Starting stream request",
+                "rid-tz1",
+                "conv-tz",
+                "default",
+                None,
+            )
+        ],
+    )
+    tracking = tmp_path / "tracking.db"
+    _write_tracking_db(tracking, [("rid-tz1", "conv-tz", "model-from-hash")])
+    hook_path = tmp_path / "hooks.ndjson"
+    hook_path.write_text(
+        json.dumps(
+            {
+                "hook_event": "stop",
+                "received_at": "2026-07-03T02:12:25+00:00",
+                "payload": {
+                    "conversation_id": "conv-tz",
+                    "generation_id": "rid-tz1",
+                    "model": "default",
+                    "model_id": "hook-aware",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    corpus = build_corpus(
+        projects_dir=projects,
+        logs_dir=logs,
+        tracking_db=tracking,
+        hook_event_paths=[hook_path],
+    )
+    assert len(corpus.samples) == 1
+    assert corpus.samples[0].label == "hook-aware"
+    assert corpus.samples[0].label_source == "hook"
+
+
 def test_build_corpus_drops_unlabeled_by_default(tmp_path):
     projects = tmp_path / "projects"
     logs = tmp_path / "logs"

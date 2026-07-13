@@ -42,6 +42,15 @@ MATCH_BEFORE_S = 180
 MATCH_AFTER_S = 900
 
 
+def _naive_dt(value: Optional[datetime]) -> Optional[datetime]:
+    """统一为 naive datetime，避免 hook(aware) 与 structured log(naive) 混排报错。"""
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        return value.replace(tzinfo=None)
+    return value
+
+
 @dataclass
 class CorpusSample:
     conversation_id: str
@@ -195,7 +204,7 @@ class LabelIndex:
 
     def finalize(self) -> None:
         for events in self.by_conversation.values():
-            events.sort(key=lambda e: e.timestamp or datetime.min)
+            events.sort(key=lambda e: _naive_dt(e.timestamp) or datetime.min)
 
     def resolve_model(
         self, request_id: Optional[str], event_model: Optional[str] = None
@@ -226,13 +235,15 @@ class LabelIndex:
         self, conversation_id: str, user_ts: Optional[datetime], used: set
     ) -> Optional[RequestEvent]:
         """把 turn 的用户时间戳对齐到最近的请求事件（每个事件只用一次）。"""
-        if user_ts is None:
+        user_naive = _naive_dt(user_ts)
+        if user_naive is None:
             return None
         candidates = []
         for i, ev in enumerate(self.by_conversation.get(conversation_id, [])):
-            if i in used or ev.timestamp is None:
+            ev_ts = _naive_dt(ev.timestamp)
+            if i in used or ev_ts is None:
                 continue
-            delta = (ev.timestamp - user_ts).total_seconds()
+            delta = (ev_ts - user_naive).total_seconds()
             if -MATCH_BEFORE_S <= delta <= MATCH_AFTER_S:
                 candidates.append((abs(delta), i, ev))
         if not candidates:
@@ -249,7 +260,7 @@ def _parse_hook_timestamp(value: Optional[str]) -> Optional[datetime]:
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
     try:
-        return datetime.fromisoformat(text)
+        return _naive_dt(datetime.fromisoformat(text))
     except ValueError:
         return None
 
@@ -383,7 +394,7 @@ def build_label_index(
             parsed_ts = None
             if ts:
                 try:
-                    parsed_ts = datetime.fromisoformat(str(ts))
+                    parsed_ts = _naive_dt(datetime.fromisoformat(str(ts)))
                 except ValueError:
                     parsed_ts = None
             index.add_event(

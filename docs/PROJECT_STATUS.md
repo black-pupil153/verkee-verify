@@ -5,14 +5,14 @@
 
 ## 一句话状态
 
-VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视长检索 + **主路径实现（G/H/C+B）均已完成**。下一里程碑：手选会话 `blindtest build-corpus` → `train` → 本机验证 Auto `coverage`；可选 D/F 探针先验 / ITT / 标题补全。
+VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视长检索 + **主路径实现（G/H/C+B）均已完成**；手选语料 `build-corpus` / `train` 与本机 Auto `coverage` 验收已通过。下一里程碑：可选 D/F 探针先验 / ITT / 标题补全；扩手选样本池与校准。
 
 ## 仓库与运行状态
 
 - GitHub：<https://github.com/black-pupil153/VerAI>
 - 本地仓库根目录：`/Users/gelion/code/alibaba/ai-verify`
 - 分支：`main`，已跟踪 `origin/main`
-- Auto 透视主路径（G/H/C+B）与 `docs/research/` 已纳入本轮 commit；**尚未 push**。新会话继续手选语料训练与 coverage 验收即可。
+- Auto 透视主路径 + 手选 train/coverage 验收相关修复已 commit；**尚未 push**。本地语料/模型在 `~/.ai-verify/blindtest/`（不入 git）。
 - `venv/`、`.pytest_cache/`、`.ruff_cache/`、本地数据库和日志均已忽略，测试夹具 `tests/fixtures/**/*.log` 与脱敏 `*.ndjson` 是特意纳入 Git 的例外。
 
 ## 产品判断
@@ -65,6 +65,7 @@ ai-verify cursor recommend
 | 修复 | hook `subagent_id` 引号+换行清洗；子任务不再出现在顶层 `tasks` 列表 |
 | 标题缺口 | agent-transcript 任务常无 composerHeader 对齐 →「(无标题)」；不读 prompt 补标题 |
 | Auto 透视（2026-07-12） | 无事实 → `pending-infer`（非终态）；报表双轨 `factual_*` / `inferred_*` + `coverage`；推断不写入 `resolved_model` |
+| 手选 train + coverage（2026-07-13） | `build-corpus --since 30d`：24 标签样本（grok-4.5×19 / claude-fable-5×5；标签 hook 10 / structured_log 11 / uniform 3）；`train` CV **91.7%**；Auto 任务 `166af1e3` infer 后 **coverage 100%**（fact 0% / inferred 100%，`resolved_model` 仍为 default/unknown）；mixed `469c3074` coverage 75%、分轨可见、阈值下仍有 pending-infer |
 
 基线测试：
 
@@ -72,7 +73,7 @@ ai-verify cursor recommend
 venv/bin/python -m pytest -q tests -k "not ml_optional"
 ```
 
-最近结果：`114 passed, 1 deselected`（2026-07-13 复验）。
+最近结果：`115 passed, 1 deselected`（2026-07-13；含 hook aware/naive 时间戳混排回归）。
 
 完整测试集会触发可选的 ML / Hugging Face 路径；除非本次工作涉及 ML 指纹依赖，否则以上基线命令应作为回归检查。`tests/test_cursor_usage.py` 已隔离本机 Cursor hook 事件路径，保留这项隔离。
 
@@ -86,8 +87,8 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 4. ~~Auto 全量透视长检索~~（已完成：见 [`docs/research/`](research/README.md)）
 5. ~~实现 Auto 全量透视主路径~~（已完成：hook 事实/tokens、分轨报表、blindtest 代码/文本特征）
 6. ~~提交本轮工作区改动~~（含 `docs/research/` 与 Auto 透视代码）
-7. **手选会话 `blindtest build-corpus` → `train` → `infer` + 本机 Auto coverage 验收**
-8. 可选：周期探针先验（D/F）、ITT（E）、无 composerHeader 标题来源、proxy merge
+7. ~~手选会话 `blindtest build-corpus` → `train` → `infer` + 本机 Auto coverage 验收~~（已完成；语料/模型仅存本机）
+8. **可选**：周期探针先验（D/F）、ITT（E）、无 composerHeader 标题来源、proxy merge；扩手选样本与阈值校准
 
 ## 关键边界
 
@@ -100,8 +101,8 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 
 ```text
 先阅读 docs/PROJECT_STATUS.md 与 docs/research/README.md。
-不要重做 Cursor P0/P1、长检索或 G/H/C+B。
-下一优先：手选会话 blindtest build-corpus → train → 本机验证 Auto coverage。
+不要重做 Cursor P0/P1、长检索、G/H/C+B，或已完成的手选 train/coverage 验收。
+下一优先：可选 D/F 探针先验 / ITT / 标题补全；或扩手选样本再校准。
 保持 factual vs inferred 分轨与隐私边界。
 回归：venv/bin/python -m pytest -q tests -k "not ml_optional"。
 ```

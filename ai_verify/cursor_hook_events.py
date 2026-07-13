@@ -24,6 +24,8 @@ class HookEvent:
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     duration_ms: Optional[int] = None
+    task: Optional[str] = None
+    transcript_path: Optional[str] = None
     raw: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -114,6 +116,10 @@ def _parse_hook_event(obj: Dict[str, Any]) -> Optional[HookEvent]:
         ),
         duration_ms=_int_or_none(
             payload.get("duration_ms") or payload.get("durationMs")
+        ),
+        task=_str_or_none(payload.get("task")),
+        transcript_path=_str_or_none(
+            payload.get("transcript_path") or payload.get("transcriptPath")
         ),
         raw=obj,
     )

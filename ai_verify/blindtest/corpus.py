@@ -16,6 +16,7 @@ hook/tracking 给出非 default 真名）。标签对齐与建语料可批量自
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import asdict, dataclass, field
@@ -37,10 +38,74 @@ _TS_RE = re.compile(
     r"<timestamp>\s*\w+,?\s+(\w{3})\w*\.?\s+(\d{1,2}),\s*(\d{4}),?\s*(\d{1,2}):(\d{2})\s*(AM|PM)",
     re.IGNORECASE,
 )
+_USER_QUERY_RE = re.compile(r"<user_query>\s*(.*?)\s*</user_query>", re.DOTALL | re.IGNORECASE)
 
 # 用户消息与请求开始时间的对齐窗口（用户 timestamp 只有分钟精度）
 MATCH_BEFORE_S = 180
 MATCH_AFTER_S = 900
+
+
+def normalize_model_slug(model: Optional[str]) -> Optional[str]:
+    """把 hook/catalog slug 收成闭集常用名（如 claude-fable-5、grok-4.5）。"""
+    if not model:
+        return None
+    m = model.strip()
+    if not m or m == "default":
+        return None
+    if m.startswith("cursor-"):
+        m = m[len("cursor-") :]
+    for suffix in ("-thinking-high", "-high-fast", "-fast-xhigh"):
+        if m.endswith(suffix):
+            m = m[: -len(suffix)]
+            break
+    return m or None
+
+
+def _normalize_task_text(text: str) -> str:
+    text = _TS_RE.sub(" ", text)
+    m = _USER_QUERY_RE.search(text)
+    if m:
+        text = m.group(1)
+    text = re.sub(r"</?user_query>", " ", text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def task_fingerprint(text: str) -> Optional[str]:
+    """稳定指纹：用于 hook.task ↔ 子代理 transcript 首条 user 对齐。"""
+    norm = _normalize_task_text(text)
+    if len(norm) < 32:
+        return None
+    return hashlib.md5(norm[:800].encode("utf-8")).hexdigest()
+
+
+def first_user_text_from_transcript(path: Path) -> Optional[str]:
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if obj.get("role") != "user":
+                    continue
+                message = obj.get("message") or {}
+                content = message.get("content") or []
+                if not isinstance(content, list):
+                    continue
+                parts = [
+                    blk.get("text") or ""
+                    for blk in content
+                    if isinstance(blk, dict) and blk.get("type") == "text"
+                ]
+                text = "\n".join(p for p in parts if p).strip()
+                if text:
+                    return text
+    except OSError:
+        return None
+    return None
 
 
 def _naive_dt(value: Optional[datetime]) -> Optional[datetime]:
@@ -202,6 +267,8 @@ class LabelIndex:
         self.hash_models: Dict[str, str] = {}  # request_id -> model (非 default)
         self.hook_models: Dict[str, str] = {}  # request_id -> hook model_id (非 default)
         self.durations: Dict[str, float] = {}  # request_id -> duration_ms（含 Auto）
+        # Task 子代理：hook.task 指纹 -> 规范化模型（对齐 /subagents/<uuid>.jsonl）
+        self.task_models: Dict[str, str] = {}
 
     def add_event(self, ev: RequestEvent) -> None:
         self.by_conversation.setdefault(ev.conversation_id, []).append(ev)
@@ -218,7 +285,7 @@ class LabelIndex:
         if rid and rid in self.hook_models:
             return self.hook_models[rid], "hook"
         if event_model:
-            return event_model, None  # caller sets source from event
+            return normalize_model_slug(event_model) or event_model, None
         if rid and rid in self.hash_models:
             return self.hash_models[rid], "ai_code_hashes"
         return None, None
@@ -296,8 +363,12 @@ def build_label_index(
                 # duration 对 Auto/手选均有用，与是否可见真名无关
                 if rid and hev.duration_ms is not None and hev.duration_ms >= 0:
                     index.durations[rid] = float(hev.duration_ms)
-                mid = hev.model_id or hev.subagent_model
-                if not mid or mid == "default":
+                mid = normalize_model_slug(hev.model_id or hev.subagent_model)
+                if hev.task and mid:
+                    fp = task_fingerprint(hev.task)
+                    if fp:
+                        index.task_models[fp] = mid
+                if not mid:
                     continue
                 if rid:
                     index.hook_models[rid] = mid
@@ -489,6 +560,16 @@ def build_corpus(
         n_conversations += 1
         n_turns_total += len(turns)
         label_turns(turns, index)
+        # Task 子代理：父会话 hook 带 task 文本，子 transcript 首条 user 可指纹对齐
+        if index.task_models and any(t.label is None for t in turns):
+            user0 = first_user_text_from_transcript(path)
+            fp = task_fingerprint(user0) if user0 else None
+            task_model = index.task_models.get(fp) if fp else None
+            if task_model:
+                for turn in turns:
+                    if turn.label is None:
+                        turn.label = task_model
+                        turn.label_source = "hook_task"
         for turn in turns:
             if len(turn.full_text) < min_turn_chars and not turn.tool_batches:
                 continue

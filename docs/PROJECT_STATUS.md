@@ -86,6 +86,7 @@ ai-verify blindtest eval --split default --tau 0.7 --sweep
 | 手选 train + coverage（2026-07-13） | `build-corpus --since 30d`：24 标签样本（grok-4.5×19 / claude-fable-5×5；标签 hook 10 / structured_log 11 / uniform 3）；无 split 时 `train` CV **91.7%**（**LOCO-CV 诊断，非盲评**）；Auto 任务 `166af1e3` infer 后 **coverage 100%**（fact 0% / inferred 100%，`resolved_model` 仍为 default/unknown）；mixed `469c3074` coverage 75%、分轨可见、阈值下仍有 pending-infer |
 | H 默认融合 + 标题回退（2026-07-13） | `aggregate_task(auto_infer=True)` 对 auto/mixed 自动写 `blindtest_inferences`；`conversation_summaries.title/tldr` 作无 composerHeader 时的标题回退 |
 | **隐藏 test 盲评（2026-07-13）** | 见下节；**勿与 LOCO-CV 91.7% 混报** |
+| **Cheap GT + hook_task 对齐（2026-07-13）** | Task 子代理用 `hook.task`↔transcript 指纹对齐；语料 **53** 样本（composer×7 / gpt-sol×2 / gpt-terra×1 / grok×34 / fable×9）；split `cheap-gt`：**Acc@forced 87.5%**（n=16）、**Acc@τ=0.7 90%**（coverage 62.5%）。gpt 类仍偏少未进 test |
 
 ### 隐藏 test 盲评（2026-07-13，split=`default` seed=42）
 
@@ -111,8 +112,23 @@ Runs（仅本机，不入 git）：
 
 结论：管道已通；数字不可外推——test n=3、单会话、闭集缺一类。扩量（批量手选模型会话）优先于换模型。
 
-### Phase 2 本机结果（2026-07-13）
+### Cheap GT 盲评（2026-07-13，split=`cheap-gt` seed=42）
 
+语料扩到 53 标签样本；`hook_task` 对齐 Task 子代理（composer/gpt/grok）。划分：train 16 / val 5 / test 4 会话；密封 16 条。gpt 两类会话过少未进 test。
+
+| 评估 | 指标 | 值 |
+|------|------|----|
+| Val Acc（非盲评） | | 85.7% |
+| **Acc@forced** | | **87.5%**（n=16） |
+| macro-F1 / ECE / Brier | | 0.808 / 0.177 / 0.260 |
+| **Acc@τ=0.7** | | **90.0%**（coverage 62.5%） |
+| τ@0.8 | Acc / cov | 100% / 50% |
+
+Runs：`~/.ai-verify/blindtest/runs/20260713-201802/`（train）、`…-1`（forced）、`…-2`（selective）。
+
+说明：早先误跑了一批 fable Task（额度已花）；后续 GT 以 composer / gpt / grok 为主。
+
+基线测试：
 消融 `ablate --split default`（Acc@forced，n=3；runs `…/20260713-201038/`）：
 
 | preset | Acc@forced | Val Acc |

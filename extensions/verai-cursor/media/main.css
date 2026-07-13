@@ -1,0 +1,147 @@
+:root {
+  --fg: var(--vscode-foreground);
+  --muted: var(--vscode-descriptionForeground);
+  --bg: var(--vscode-sideBar-background);
+  --btn: var(--vscode-button-background);
+  --btn-fg: var(--vscode-button-foreground);
+  --border: var(--vscode-widget-border, rgba(127, 127, 127, 0.35));
+  --ok: var(--vscode-testing-iconPassed, #3ba55d);
+  --bad: var(--vscode-testing-iconFailed, #f23f42);
+  --bar: var(--vscode-progressBar-background, #3794ff);
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  color: var(--fg);
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+  background: var(--bg);
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+
+h2 {
+  margin: 16px 0 8px;
+  font-size: 13px;
+}
+
+h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tagline,
+.muted,
+.meta,
+.disclaimer,
+.fix {
+  color: var(--muted);
+  margin: 4px 0 8px;
+  line-height: 1.4;
+}
+
+.disclaimer {
+  font-size: 11px;
+}
+
+button#refresh {
+  background: var(--btn);
+  color: var(--btn-fg);
+  border: none;
+  padding: 4px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.pill.ok {
+  color: var(--ok);
+}
+
+.pill.bad {
+  color: var(--bad);
+}
+
+.task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.task-list button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.task-list .title {
+  display: block;
+  font-weight: 600;
+}
+
+.task-list .meta {
+  display: block;
+  font-size: 11px;
+}
+
+.block {
+  margin: 12px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(40px, 1.5fr) 40px;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar {
+  height: 8px;
+  background: rgba(127, 127, 127, 0.2);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  background: var(--bar);
+}
+
+.pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+code {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+}

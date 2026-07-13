@@ -1,0 +1,90 @@
+{
+  "name": "verai-cursor",
+  "displayName": "VerAI Session Usage",
+  "description": "See factual vs inferred model shares for the current Cursor session (local-only).",
+  "version": "0.1.0",
+  "publisher": "verai",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onView:verai.sessionView",
+    "onCommand:verai.showSessionUsage",
+    "onCommand:verai.refresh",
+    "onCommand:verai.openLatest"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "verai",
+          "title": "VerAI",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "verai": [
+        {
+          "type": "webview",
+          "id": "verai.sessionView",
+          "name": "Session Usage"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "verai.showSessionUsage",
+        "title": "VerAI: Show Session Usage",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "verai.refresh",
+        "title": "VerAI: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "verai.openLatest",
+        "title": "VerAI: Open Latest Session"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "verai.refresh",
+          "when": "view == verai.sessionView",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "VerAI",
+      "properties": {
+        "verai.aiVerifyPath": {
+          "type": "string",
+          "default": "ai-verify",
+          "description": "Path to the ai-verify CLI executable (must be on PATH or absolute)."
+        },
+        "verai.tasksLimit": {
+          "type": "number",
+          "default": 15,
+          "description": "How many recent sessions to list in the sidebar."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
+    "typescript": "^5.3.0"
+  }
+}

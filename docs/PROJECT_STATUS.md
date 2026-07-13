@@ -5,7 +5,7 @@
 
 ## 一句话状态
 
-VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1 盲评基建（已 commit）+ 本机隐藏 test 跑通均已完成。**Phase 2 落地中**：duration_ms 特征、通道消融（`ablate`）、Auto 弱验证（`eval-auto`）；GT 扩量 = **批量开「手选模型」会话**（picker 固定，标签自动对齐），不是逐 turn 手标。瓶颈仍是数据（test n=3）；91.7%=LOCO-CV≠盲评；Acc@forced=66.7%。微调后置。
+VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲评 + Cheap GT `cheap-gt-v2`（Acc@forced **78.6%** / Acc@τ=0.7 **90%**）已完成。产品化已开跑：**侧边栏扩展骨架** + **CLI `--json`** + **cheap-gt-v2 消融**（见 [`ROADMAP.md`](ROADMAP.md)）。微调后置。
 
 ## 仓库与运行状态
 
@@ -86,7 +86,8 @@ ai-verify blindtest eval --split default --tau 0.7 --sweep
 | 手选 train + coverage（2026-07-13） | `build-corpus --since 30d`：24 标签样本（grok-4.5×19 / claude-fable-5×5；标签 hook 10 / structured_log 11 / uniform 3）；无 split 时 `train` CV **91.7%**（**LOCO-CV 诊断，非盲评**）；Auto 任务 `166af1e3` infer 后 **coverage 100%**（fact 0% / inferred 100%，`resolved_model` 仍为 default/unknown）；mixed `469c3074` coverage 75%、分轨可见、阈值下仍有 pending-infer |
 | H 默认融合 + 标题回退（2026-07-13） | `aggregate_task(auto_infer=True)` 对 auto/mixed 自动写 `blindtest_inferences`；`conversation_summaries.title/tldr` 作无 composerHeader 时的标题回退 |
 | **隐藏 test 盲评（2026-07-13）** | 见下节；**勿与 LOCO-CV 91.7% 混报** |
-| **Cheap GT + hook_task 对齐（2026-07-13）** | Task 子代理用 `hook.task`↔transcript 指纹对齐；语料 **53** 样本（composer×7 / gpt-sol×2 / gpt-terra×1 / grok×34 / fable×9）；split `cheap-gt`：**Acc@forced 87.5%**（n=16）、**Acc@τ=0.7 90%**（coverage 62.5%）。gpt 类仍偏少未进 test |
+| **Cheap GT + hook_task 对齐（2026-07-13）** | Task 子代理用 `hook.task`↔transcript 指纹对齐；语料曾 **53** 样本；split `cheap-gt`：**Acc@forced 87.5%**（n=16）、**Acc@τ=0.7 90%**（coverage 62.5%） |
+| **GT 10-scenario 扩量（2026-07-13）** | composer/gpt-sol/gpt-terra 各补满 **10** 会话（fable 不扩、存量进闭集；grok 已 ≥10）；语料 **78** 样本；split `cheap-gt-v2` 复测：见下节 |
 
 ### 隐藏 test 盲评（2026-07-13，split=`default` seed=42）
 
@@ -128,6 +129,52 @@ Runs：`~/.ai-verify/blindtest/runs/20260713-201802/`（train）、`…-1`（for
 
 说明：早先误跑了一批 fable Task（额度已花）；后续 GT 以 composer / gpt / grok 为主。
 
+### Cheap GT v2 盲评（2026-07-13，split=`cheap-gt-v2` seed=42；复测）
+
+按「GT 10-scenario expansion」补齐后 `import --since 7d --full` → `build-corpus --since 30d` → split/train/eval。复测相对首次多 1 条 grok 训练样本。
+
+| 模型 | 会话数 | 样本数 | 备注 |
+|------|--------|--------|------|
+| composer-2.5-fast | 10 | 10 | 达标 |
+| gpt-5.6-sol-medium | 10 | 10 | 达标 |
+| gpt-5.6-terra-medium | 10 | 10 | 达标 |
+| grok-4.5 | 11 | 39 | 已 ≥10，未再扩 |
+| claude-fable-5 | 6 | 9 | **不扩**；存量进闭集 |
+
+划分：train 28 / val 9 / test 9 会话；密封 14 条。标签来源：hook_task 37 / hook 27 / structured_log 11 / uniform 3。
+
+| 评估 | 指标 | 值 |
+|------|------|----|
+| Val Acc（非盲评） | | 72.2%（T=1.00；n_train=46 / n_val=18） |
+| **Acc@forced** | | **78.6%**（n=14 / 9 会话；首次同 split 曾 85.7%） |
+| macro-F1 / ECE / Brier | | 0.638 / 0.146 / 0.260 |
+| **Acc@τ=0.7** | | **90.0%**（coverage **71.4%**；abstain 4） |
+| τ@0.5–0.6 | Acc / cov | 90.9% / 78.6% |
+| τ@0.8 | Acc / cov | 100% / 57.1% |
+| τ@0.9 | Acc / cov | 100% / 28.6% |
+
+混淆（forced）：composer 2/2、terra 2/2；grok 6/7（1→fable）；sol 1/2（1→terra）；fable 0/1（→composer）。
+
+Runs（复测）：`~/.ai-verify/blindtest/runs/20260713-203239/`（train）、`…/20260713-203240/`（forced）、`…/20260713-203240-1/`（selective+sweep）。
+
+**勿与 LOCO-CV 91.7% 或旧 Acc@forced 66.7%（default split n=3）混报。**
+
+### cheap-gt-v2 通道消融 + Auto 弱验证（2026-07-13）
+
+`ablate --split cheap-gt-v2`（Acc@forced，n=14；runs `…/20260713-205144/`）：
+
+| preset | Acc@forced | Val Acc |
+|--------|------------|---------|
+| text | **85.7%** | 61.1% |
+| code | 28.6% | 22.2% |
+| text+code | **85.7%** | 61.1% |
+| text+code+behavior | 78.6% | 66.7% |
+| +latency | **92.9%** | 66.7% |
+
+读法：在本闭集上 **text 已是主力**；纯 code 很弱；behavior 略扰动；**latency 再抬一截**（小样本，勿外推成 SLA）。全通道日常评测仍以此前 forced **78.6%** 为准（与 ablate 中间一行同量级）。
+
+`eval-auto --limit 20 --no-infer`（runs `…/20260713-205144-1/`）：coverage **75%**；opaque_residual **25%**；agree_with_fact **66.7%**（n=3 事实子集）。**非盲评 GT**。
+
 基线测试：
 消融 `ablate --split default`（Acc@forced，n=3；runs `…/20260713-201038/`）：
 
@@ -151,22 +198,19 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 
 ## 下一阶段建议
 
-优先按以下顺序推进：
+优先按 [`docs/ROADMAP.md`](ROADMAP.md)（插件 1A + 并行 2B）推进：
 
-1. ~~本机真实 Cursor 数据 E2E~~（已完成）
-2. ~~按真实结果修解析/合并 + 脱敏夹具~~（已完成：hook ID / 子任务列表）
-3. ~~同步 `CURSOR_AUTO_USAGE.md` 与 README 品牌收口~~（已完成）
-4. ~~Auto 全量透视长检索~~（已完成：见 [`docs/research/`](research/README.md)）
-5. ~~实现 Auto 全量透视主路径~~（已完成：见 [`docs/research/`](research/README.md)）
-6. ~~提交本轮工作区改动~~（含 `docs/research/` 与 Auto 透视代码）
-7. ~~手选会话 `blindtest build-corpus` → `train` → `infer` + 本机 Auto coverage 验收~~（已完成；语料/模型仅存本机）
-8. ~~H 融合默认开启 + 无 composerHeader 标题 summary 回退~~
-9. ~~Phase 1 盲评基建 + 本机隐藏 test 跑通~~（已 commit：`6c25caa`）
-10. **Phase 2（进行中）**：duration/消融/`eval-auto` 代码；**GT 扩量需你批量开手选模型会话**（每类 ≥2 会话进 test）后再 `import`→`build-corpus`→`split`→`eval`
-11. **Phase 3**（隐藏 test 平台期后且用户要求）：sentence-transformers / 微调
-12. **可选**：周期探针先验（D/F）、ITT（E）、proxy merge — 仅用户点名时做
+1. ~~本机真实 Cursor 数据 E2E~~ … ~~GT 10-scenario / cheap-gt-v2~~（见上文已完成清单）
+2. ~~**B1** cheap-gt-v2 通道消融~~（已完成：text 主力，+latency 最高）
+3. ~~**A1** `cursor doctor|tasks|task --json`~~（已完成）
+4. ~~**A2** `extensions/verai-cursor` 骨架~~（已落仓；待 `npm i && compile && vsce package` dogfood）
+5. **A3**：面板会话选择器 / 占比条与 CLI 对账；静默 import
+6. **B2**：每便宜类再补真实长会话（非模板）；目标 n_test ≥30
+7. **C**：Dogfood → 5 人 alpha → VSIX 软发布（见 ROADMAP Track C）
+8. **Phase 3**（平台期后且用户要求）：sentence-transformers / 微调
+9. **可选**：周期探针先验（D/F）、ITT（E）、proxy merge — 仅用户点名时做
 
-## 关键边界
+## 安全边界
 
 - Cursor Auto 的底层路由并非官方逐任务承诺；输出必须保留 `confidence`、事实/推断分轨；**不得**把推断静默写入 `resolved_model`，也不得宣称云端逐步真名 100% 可知。
 - Cursor 第一方云请求通常不走本地代理；proxy 仅是 BYOK / 兼容 API 场景的补充证据。
@@ -177,11 +221,10 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 ## 下一会话开场提示
 
 ```text
-先读 docs/PROJECT_STATUS.md、docs/research/README.md、docs/research/EXPERIMENT_PROTOCOL.md。
-不要重做：Cursor P0/P1、长检索、G/H/C+B、手选 train/coverage、H 默认融合、标题 summary 回退、Phase 1、本机隐藏 test、duration/消融/eval-auto 基建、D/F/ITT（除非用户点名）。
-产品判断：最根本能力是模型盲测；瓶颈是数据。91.7%=LOCO-CV≠盲评；Acc@forced=66.7%。
-「手选 GT」= Cursor picker 固定模型（可批量开会话）；标签用 import+build-corpus 自动对齐；禁止 Auto 自标。
-下一优先：用户批量开手选模型会话（每类≥2）后 rebuild corpus→split→eval；或 commit/push Phase 2。
+先读 docs/ROADMAP.md、docs/PROJECT_STATUS.md、docs/research/EXPERIMENT_PROTOCOL.md。
+不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2 盲评与消融、CLI --json、扩展骨架、D/F/ITT（除非用户点名）。
+产品判断：最根本能力是模型盲测；产品化主路径是侧边栏会话占比（事实/推断分轨）。
+下一优先：扩展 npm compile + VSIX dogfood；或 B2 真实长会话扩量；微调后置。
 回归：venv/bin/python -m pytest -q tests -k "not ml_optional"。
 保持 factual vs inferred 分轨与隐私边界。
 ```

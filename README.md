@@ -101,6 +101,16 @@ ai-verify cursor report --period weekly
 
 可选：`ai-verify cursor hooks install` 补采 hook 事件中的 model 字段。
 
+机器可读（插件桥接）：
+
+```bash
+ai-verify cursor doctor --json
+ai-verify cursor tasks --json --limit 15
+ai-verify cursor task --latest --json
+```
+
+侧边栏扩展（开发中）：[`extensions/verai-cursor/`](extensions/verai-cursor/README.md)  
+产品路线图：[`docs/ROADMAP.md`](docs/ROADMAP.md)  
 设计与验收细节见 [`docs/CURSOR_AUTO_USAGE.md`](docs/CURSOR_AUTO_USAGE.md)。
 
 ## 配置与数据
@@ -118,7 +128,8 @@ python -m build
 ```
 
 文件职责索引：[`docs/FILE_INVENTORY.md`](docs/FILE_INVENTORY.md)  
-阶段交接：[`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)
+阶段交接：[`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)  
+产品路线图：[`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 ## License
 

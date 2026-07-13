@@ -30,6 +30,6 @@
 | H | `factual_*` / `inferred_*` / `coverage`；`auto-opaque` → `pending-infer`；**默认 auto_infer** | 已完成 |
 | C+B | blindtest 轻量代码/文本特征 + hook 标签优先级 | 已完成 |
 
-**Phase 1 已落地并本机跑通**（split + 密封标签 + forced/selective eval）。**Phase 2**：duration_ms、通道消融、`eval-auto`；GT 扩量 = 批量「手选模型」会话（标签自动对齐，禁止 Auto 自标）。Phase 3 微调后置。可选 D/F、ITT、proxy merge — 仅用户点名。
+**Phase 1 已落地并本机跑通**（split + 密封标签 + forced/selective eval）。**Phase 2**：duration_ms、通道消融、`eval-auto`；GT `cheap-gt-v2` Acc@forced **78.6%** / Acc@τ=0.7 **90%**；消融见 `PROJECT_STATUS`（text 主力，+latency 最高）。**产品化**：见 [`docs/ROADMAP.md`](../ROADMAP.md)（侧边栏插件 ∥ GT 加固）。Phase 3 微调后置。
 
-本机验收（2026-07-13）：`build-corpus` 24 样本 → LOCO-CV **91.7%（非盲评）**；隐藏 test Acc@forced **66.7%**（n=3，τ≥0.7 coverage 0%）。详见 `docs/PROJECT_STATUS.md`。Auto `166af1e3` coverage 100%（推断不写 `resolved_model`）。
+本机验收摘要与最新数字以 [`docs/PROJECT_STATUS.md`](../PROJECT_STATUS.md) 为准（勿混 LOCO-CV 与盲评）。

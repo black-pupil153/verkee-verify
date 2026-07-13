@@ -2,8 +2,9 @@
 AI Verify CLI - 命令行入口
 """
 
+import json
 import click
-from typing import Optional
+from typing import Any, Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -11,6 +12,11 @@ from rich.table import Table
 from ai_verify import __version__
 
 console = Console()
+
+
+def _emit_json(payload: Any) -> None:
+    """Print machine-readable JSON for extension / scripting (stdout only)."""
+    click.echo(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
 
 
 @click.group()
@@ -515,11 +521,16 @@ def cursor_board(
 
 
 @cursor.command("doctor")
-def cursor_doctor():
+@click.option("--json", "as_json", is_flag=True, help="输出机器可读 JSON（插件桥接）")
+def cursor_doctor(as_json: bool):
     """诊断 Cursor 本地数据源是否可采集"""
     from ai_verify.providers.cursor import run_doctor
 
     report = run_doctor()
+    if as_json:
+        _emit_json(report.to_dict())
+        return
+
     console.print("[bold]Cursor Auto Usage — 环境诊断[/bold]\n")
 
     for check in report.checks:
@@ -561,19 +572,31 @@ def cursor_import(since: str, full: bool):
 @click.option("--since", default="7d", help="时间范围")
 @click.option("--limit", default=20, help="最多显示条数")
 @click.option("--auto-only", is_flag=True, help="仅显示 auto/mixed 路由任务")
-def cursor_tasks(since: str, limit: int, auto_only: bool):
+@click.option("--json", "as_json", is_flag=True, help="输出机器可读 JSON（插件桥接）")
+def cursor_tasks(since: str, limit: int, auto_only: bool, as_json: bool):
     """列出最近 Cursor 任务及模型占比"""
     from ai_verify.monitor.cursor_usage import (
         format_model_share_line,
         format_output_share_line,
         list_tasks,
         parse_since,
+        task_summary_to_dict,
     )
     from ai_verify.storage.database import Database
 
     db = Database()
     since_dt = parse_since(since)
     items = list_tasks(db, since=since_dt, limit=limit, auto_only=auto_only)
+
+    if as_json:
+        _emit_json(
+            {
+                "since": since,
+                "count": len(items),
+                "tasks": [task_summary_to_dict(t) for t in items],
+            }
+        )
+        return
 
     console.print(f"[bold]Cursor Auto Usage — 最近 {since}[/bold]\n")
     if not items:
@@ -624,14 +647,27 @@ def cursor_tasks(since: str, limit: int, auto_only: bool):
     is_flag=True,
     help="显示逐 turn 盲测细节（默认已对 Auto/Mixed 自动融合推断轨）",
 )
+@click.option("--json", "as_json", is_flag=True, help="输出机器可读 JSON（插件桥接）")
+@click.option(
+    "--include-per-request",
+    is_flag=True,
+    help="JSON 模式下附带 per_request 明细（体积较大）",
+)
 def cursor_task(
-    task_id: Optional[str], latest: bool, search: Optional[str], score: bool, inferred: bool
+    task_id: Optional[str],
+    latest: bool,
+    search: Optional[str],
+    score: bool,
+    inferred: bool,
+    as_json: bool,
+    include_per_request: bool,
 ):
     """查看单个 Cursor 任务的模型用量详情"""
     from ai_verify.monitor.cursor_usage import (
         _bar,
         aggregate_task,
         render_task_score_table,
+        task_report_to_dict,
     )
     from ai_verify.storage.database import Database
 
@@ -640,21 +676,36 @@ def cursor_task(
     if search:
         matches = db.search_cursor_tasks(search, limit=5)
         if not matches:
-            console.print(f"[yellow]未找到匹配任务: {search}[/yellow]")
+            if as_json:
+                _emit_json({"error": "not_found", "query": search})
+            else:
+                console.print(f"[yellow]未找到匹配任务: {search}[/yellow]")
             return
-        if len(matches) > 1:
+        if len(matches) > 1 and not as_json:
             console.print("[yellow]多个匹配，使用第一个:[/yellow]")
         task_id = matches[0]["task_id"]
     elif latest or not task_id:
         latest_task = db.get_latest_cursor_task()
         if not latest_task:
-            console.print("[yellow]暂无任务[/yellow]")
+            if as_json:
+                _emit_json({"error": "empty", "message": "暂无任务"})
+            else:
+                console.print("[yellow]暂无任务[/yellow]")
             return
         task_id = latest_task["task_id"]
 
     report = aggregate_task(db, task_id)
     if not report:
-        console.print(f"[red]✗ 未找到任务: {task_id}[/red]")
+        if as_json:
+            _emit_json({"error": "not_found", "task_id": task_id})
+        else:
+            console.print(f"[red]✗ 未找到任务: {task_id}[/red]")
+        return
+
+    if as_json:
+        _emit_json(
+            task_report_to_dict(report, include_per_request=include_per_request)
+        )
         return
 
     console.print(f"[bold]Task {report.task_id}[/bold]")

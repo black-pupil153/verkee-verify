@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -260,6 +260,28 @@ class TaskUsageReport:
     confidence_counts: Dict[str, int] = field(default_factory=dict)
     subagents: List[Dict[str, Any]] = field(default_factory=list)
     per_request: List[Dict[str, Any]] = field(default_factory=list)
+
+
+def task_summary_to_dict(summary: TaskSummary) -> Dict[str, Any]:
+    """Serialize TaskSummary for CLI --json / extension bridge."""
+    return asdict(summary)
+
+
+def task_report_to_dict(
+    report: TaskUsageReport, *, include_per_request: bool = False
+) -> Dict[str, Any]:
+    """Serialize TaskUsageReport for CLI --json / extension bridge.
+
+    Omits per_request by default (heavy); plugin panels use share aggregates.
+    """
+    payload = asdict(report)
+    if not include_per_request:
+        payload.pop("per_request", None)
+    payload["disclaimer"] = (
+        "inferred tracks are not cloud routing ground truth; "
+        "only factual_* come from telemetry"
+    )
+    return payload
 
 
 PENDING_INFER_BUCKET = "pending-infer"

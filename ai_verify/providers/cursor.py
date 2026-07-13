@@ -459,6 +459,27 @@ class DoctorReport:
     def add(self, check: DoctorCheck) -> None:
         self.checks.append(check)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize for CLI --json / extension bridge."""
+        return {
+            "ok": all(c.ok for c in self.checks) if self.checks else False,
+            "checks": [
+                {
+                    "name": c.name,
+                    "ok": c.ok,
+                    "detail": c.detail,
+                    # extra may contain Path / large schema blobs; keep lean
+                    "extra_keys": sorted(c.extra.keys()) if c.extra else [],
+                }
+                for c in self.checks
+            ],
+            "collectable_fields": [
+                {"label": label, "via": via, "source": source}
+                for label, via, source in self.collectable_fields
+            ],
+            "suggestion": self.suggestion,
+        }
+
 
 def run_doctor(ai_verify_db: Optional[Path] = None) -> DoctorReport:
     """运行 Cursor Auto Usage 环境诊断。"""

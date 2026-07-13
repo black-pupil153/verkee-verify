@@ -1,13 +1,14 @@
-# AI Verify 文件整理索引
+# VerAI 文件整理索引
 
 > 更新日期：2026-07-13
 
-本文按用途整理 `ai-verify/` 下的项目文件，帮助后续开发时快速定位入口、核心模块、测试和本地产物。
+本文按用途整理仓库文件，帮助后续开发时快速定位入口、核心模块、扩展、测试和本地产物。  
+对外品牌 **VerAI**（读作 ver-eye）；包名 / CLI 仍为 `ai-verify`。
 
 ## 目录概览
 
 ```text
-ai-verify/
+ai-verify/   (= VerAI 仓库根)
 ├── ai_verify/                 # Python 包源码
 │   ├── alerts/                 # 报警与通知
 │   ├── blindtest/              # Cursor Auto 底层模型盲测
@@ -15,7 +16,8 @@ ai-verify/
 │   ├── providers/              # 上游供应商配置解析
 │   ├── proxy/                  # 透明代理与被动监控
 │   └── storage/                # SQLite 存储
-├── docs/                       # 设计文档与规划
+├── extensions/verai-cursor/    # Cursor 侧边栏 Webview 扩展（产品化 Track A）
+├── docs/                       # 设计文档、路线图与研究
 ├── tests/                      # 单元测试
 ├── README.md                   # 项目说明与使用入口
 ├── Makefile                    # 常用开发命令
@@ -47,7 +49,7 @@ ai-verify/
 | 文件 | 作用 |
 | --- | --- |
 | `ai_verify/__init__.py` | 包版本与作者信息。 |
-| `ai_verify/cli.py` | Click CLI 主入口，注册 `config`、`proxy`、`monitor`、`providers`、`run`、`check`、`score`、`history`、`alert`、`report` 等命令。 |
+| `ai_verify/cli.py` | Click CLI 主入口；`cursor doctor|tasks|task` 支持 `--json`（扩展桥接）。 |
 | `ai_verify/config.py` | `ConfigManager`，负责 `~/.ai-verify/config.yaml` 的初始化、读取、写入和嵌套配置项管理。 |
 | `ai_verify/runner.py` | `ai-verify run -- <command>` 实现：读取上游、启动本地代理、注入环境变量、执行子进程并转发信号。 |
 | `ai_verify/dashboard.py` | 智力打分看板：运行评测、保存 `score_snapshots`、展示最新分数和趋势火花图。 |
@@ -119,6 +121,7 @@ ai-verify/
 | `tests/test_cursor_hooks.py` | Cursor hooks 安装、卸载、合并和 probe NDJSON 分析。 |
 | `tests/test_cursor_probe.py` | Probe 日志扫描、模型字段抽取和任务过滤。 |
 | `tests/test_cursor_usage.py` | Cursor 事件导入、去重、证据合并、任务聚合、hook 补采。 |
+| `tests/test_cursor_json.py` | `cursor doctor|tasks|task --json` 契约与序列化。 |
 | `tests/test_cursor_report.py` | Cursor 报告、质量分关联和任务评分表渲染。 |
 | `tests/test_dashboard_cursor.py` | Cursor 看板周期聚合和 Rich 视图渲染。 |
 | `tests/test_blindtest_features.py` | 盲测特征提取的稳定性、文本结构、行为和延迟特征。 |
@@ -133,10 +136,21 @@ ai-verify/
 
 | 文件 | 作用 |
 | --- | --- |
+| `docs/ROADMAP.md` | 产品化双轨路线图（侧边栏插件 ∥ GT 加固 ∥ 发布增长）。 |
 | `docs/CURSOR_AUTO_USAGE.md` | Cursor Auto Usage 的数据源、置信度、隐私边界与验收记录（P0–P2.5 已落地）。 |
 | `docs/research/` | Auto 全量透视长检索：综述、文献库、遥测普查、可行性矩阵、实验协议。 |
 | `docs/FILE_INVENTORY.md` | 本文件，整理当前项目文件职责与维护边界。 |
-| `docs/PROJECT_STATUS.md` | 当前阶段、验证结果、产品决策、关键边界与下一会话执行入口。 |
+| `docs/PROJECT_STATUS.md` | 当前阶段、验证结果、产品决策、安全边界与下一会话执行入口。 |
+
+## Cursor 扩展（Track A）
+
+| 路径 | 作用 |
+| --- | --- |
+| `extensions/verai-cursor/` | 侧边栏 Session Usage Webview；经 CLI `--json` 读本机数据。 |
+| `extensions/verai-cursor/src/bridge.ts` | 调用 `ai-verify cursor … --json`。 |
+| `extensions/verai-cursor/src/extension.ts` | 激活、命令、WebviewViewProvider。 |
+| `extensions/verai-cursor/media/` | 面板 HTML 资源（main.js / main.css / icon.svg）。 |
+| `extensions/verai-cursor/README.md` | 安装（VSIX）、PATH、隐私说明。 |
 
 ## 本地产物
 
@@ -145,13 +159,15 @@ ai-verify/
 | `venv/` | 本地虚拟环境，约 749M、约 24k 个文件。 | 可由 `python -m venv venv && pip install -e ".[dev]"` 重建，已被 `.gitignore` 忽略，无需提交。 |
 | `.pytest_cache/` | Pytest 缓存，约 20K。 | 可删除或由下一次测试自动重建，已被 `.gitignore` 忽略，无需提交。 |
 | `.ruff_cache/` | Ruff 缓存。 | 可删除或由下一次 lint 自动重建，已被 `.gitignore` 忽略，无需提交。 |
+| `extensions/verai-cursor/node_modules/`、`out/`、`*.vsix` | 扩展构建产物。 | 扩展目录内 `.gitignore` 已忽略，无需提交。 |
 
 ## 维护边界
 
-- 新增 CLI 命令优先放在 `ai_verify/cli.py`，复杂业务逻辑拆到对应功能模块，CLI 只做参数解析和编排。
+- 新增 CLI 命令优先放在 `ai_verify/cli.py`，复杂业务逻辑拆到对应功能模块，CLI 只做参数解析和编排；机器可读输出统一走 `--json`。
 - 与 API 调用、模型识别、质量评分相关的逻辑优先放在 `ai_verify/monitor/`。
 - 与被动流量采集相关的逻辑优先放在 `ai_verify/proxy/server.py`，持久化统一走 `ai_verify/storage/database.py`。
 - 与渠道读取相关的逻辑放在 `ai_verify/providers/`，避免把特定工具的探测逻辑塞进通用验证引擎。
 - 与 Cursor Auto Usage 相关的导入/聚合逻辑集中在 `ai_verify/monitor/cursor_usage.py`，路径发现集中在 `ai_verify/providers/cursor.py`。
 - 与盲测相关的语料、特征、分类器集中在 `ai_verify/blindtest/`，展示层放在 `ai_verify/monitor/blindtest_view.py`。
+- 侧边栏 UI 只放在 `extensions/verai-cursor/`，不把 Node 依赖引入 Python 包。
 - 测试文件与源码模块保持对应；改动核心模块时，优先补充相邻的 `tests/test_*.py`。

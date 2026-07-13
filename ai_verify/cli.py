@@ -666,14 +666,38 @@ def cursor_task(
     )
     console.print(
         f"可解析率: {report.resolution_rate * 100:.0f}% "
-        f"({report.resolved_requests}/{report.request_count} requests)"
+        f"({report.resolved_requests}/{report.request_count} requests) | "
+        f"覆盖率: {report.coverage * 100:.0f}% "
+        f"(fact∪inferred；pending-infer={report.pending_infer_count})"
+    )
+    console.print(
+        "[dim]推断轨 ≠ 云端路由真值；仅 factual 为遥测事实。[/dim]"
     )
 
-    console.print("\n[bold]── 请求占比 ──────────────────────────[/bold]")
+    console.print("\n[bold]── 请求占比（合并展示）────────────────[/bold]")
     for model, info in report.request_shares.items():
-        label = model if model not in ("unknown", "auto-opaque") else model
         console.print(
-            f"  {label:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  ({info['count']} requests)"
+            f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  ({info['count']} requests)"
+        )
+
+    if report.factual_request_shares:
+        console.print("\n[bold]── 事实轨（telemetry）────────────────[/bold]")
+        for model, info in report.factual_request_shares.items():
+            console.print(
+                f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  ({info['count']} requests)"
+            )
+
+    if report.inferred_request_shares:
+        console.print("\n[bold]── 推断轨（blindtest，非事实）────────[/bold]")
+        for model, info in report.inferred_request_shares.items():
+            console.print(
+                f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  ({info['count']} requests)"
+            )
+    elif report.pending_infer_count > 0:
+        console.print(
+            "\n[yellow]有 pending-infer turns：运行 "
+            "ai-verify blindtest train 后默认展示推断轨，"
+            "或用 --inferred 查看细节[/yellow]"
         )
 
     if report.output_shares:
@@ -691,7 +715,7 @@ def cursor_task(
         models = [
             m
             for m in set(report.output_shares) | set(report.request_shares)
-            if m not in ("unknown", "auto-opaque")
+            if m not in ("unknown", "auto-opaque", "pending-infer")
         ]
         scores = get_model_scores(db, models)
         if any(not scores.get(m) for m in models):
@@ -721,15 +745,20 @@ def cursor_task(
     if report.per_request:
         console.print("\n[bold]── Per-request 明细 ──────────────────[/bold]")
         console.print(
-            f"  {'request_id':<22} {'selected':<12} {'resolved':<16} {'status':<10} units"
+            f"  {'request_id':<22} {'selected':<12} {'resolved':<16} {'inferred':<12} {'status':<10} units tok"
         )
         for row in report.per_request:
             rid = (row.get("request_id") or "")[:20]
             sel = (row.get("selected_model") or "-")[:12]
             res = (row.get("resolved_model") or "unknown")[:16]
+            inf = (row.get("inferred_model") or "-")[:12]
             status = (row.get("status") or "-")[:10]
+            tok = ""
+            if row.get("input_tokens") is not None or row.get("output_tokens") is not None:
+                tok = f"{row.get('input_tokens') or 0}→{row.get('output_tokens') or 0}"
             console.print(
-                f"  {rid:<22} {sel:<12} {res:<16} {status:<10} {row.get('units', 0)}"
+                f"  {rid:<22} {sel:<12} {res:<16} {inf:<12} {status:<10} "
+                f"{row.get('units', 0)} {tok}"
             )
 
     if inferred:

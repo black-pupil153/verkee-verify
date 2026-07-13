@@ -1,19 +1,23 @@
-# AI Verify
+# VerAI
 
-> 给你的 AI API 装一个监控摄像头
+> AI 渠道验真 / AI 消费验真器  
+> 读作 **ver-eye** · CLI 与包名仍为 `ai-verify`（兼容不改）
 
-CLI 工具：以**被动监控为主、反侦测主动探测为辅**，检测中转站偷换模型、质量下滑，以及官方模型降智。支持 OpenAI / Anthropic / GLM。
+你付费买到的模型，到底是不是它、值不值——应当有可追溯的证据。  
+VerAI 以**被动监控为主、主动探测为辅**，检测中转站偷换模型、质量下滑、官方模型降智，并可选透视 Cursor Auto 实际路由了哪些模型。
+
+仓库：<https://github.com/black-pupil153/VerAI>
 
 ## 核心能力
 
 | 能力 | 说明 |
 |------|------|
-| 智力打分看板 | `ai-verify score` 给当前渠道打分，可常驻刷新 |
-| 透明代理 | 拦截真实流量，支持 SSE 流式，旁路落库 + 异常报警 |
-| 反侦测探针 | 中英自然对话题池，随机抽样与参数扰动，降低被墙概率 |
-| 多模型 | OpenAI / Anthropic / GLM（智谱）及 OpenAI 兼容中转 |
-| 定时巡检 | `monitor start` 周期性打分，异常时 Webhook 通知 |
-| 历史与周报 | `history` / `report` 看趋势与降级 |
+| 渠道验真 | `check` / `score`：指纹、质量题、反侦测探针，给当前渠道打分 |
+| 透明代理 | 拦截真实流量（含 SSE），旁路落库 + 异常报警 |
+| 多模型渠道 | OpenAI / Anthropic / GLM（智谱）及 OpenAI 兼容中转 |
+| CC Switch | 自动读当前供应商；`ai-verify run -- claude` 一键包装 |
+| 定时巡检与周报 | `monitor` / `history` / `report` |
+| Cursor Auto Usage | 只读本机 Cursor 遥测；任务级事实/推断分轨与 coverage（推断≠云端真值） |
 
 ## 安装
 
@@ -26,15 +30,15 @@ pip install -e ".[dev]"
 
 可选 ML 指纹（重依赖）：`pip install -e ".[ml]"`
 
-## 快速验证效果
+## 快速开始：渠道验真
 
 ### 1. 单元测试（不耗 API）
 
 ```bash
-pytest
+pytest -q tests -k "not ml_optional"
 ```
 
-### 2. 配置你的渠道
+### 2. 配置渠道
 
 ```bash
 ai-verify config init
@@ -52,61 +56,54 @@ ai-verify config set api_key 你的智谱key
 ai-verify config set model glm-4.6
 ```
 
-### 3. 主动验证（会消耗少量 token）
+### 3. 主动验证与打分
 
 ```bash
-# 快速：指纹 + 安全 + 少量质量题
 ai-verify check
-
-# 完整：更多探针 + 质量题
 ai-verify check --full --probes 8 --questions 10
+ai-verify score
+ai-verify score --board
+ai-verify score --watch --interval 30m
 ```
 
-### 4. 智力打分看板
+## Claude Code + CC Switch
 
 ```bash
-ai-verify score              # 打一次分并展示
-ai-verify score --board      # 只看历史，不发请求
-ai-verify score --watch --interval 30m   # 常驻刷新
-```
-
-## 用 Claude Code + CC Switch（推荐）
-
-`ai-verify` 会自动读 `~/.cc-switch/` 里**当前选中的供应商**，不用再手动 `config set`。
-
-```bash
-# 看看读到了什么
 ai-verify providers list
 ai-verify providers current
-
-# 一条命令开 Claude Code（自动走当前 CC Switch 渠道 + 本地监控）
 ai-verify run -- claude
-
-# 直接测当前渠道
 ai-verify check
 ai-verify score
 ```
 
-在 CC Switch 里切换供应商后，下次 `run` / `check` / `score` 会自动跟上。
-
 代理日志：`~/.ai-verify/logs/proxy.log`  
 调用记录：`ai-verify history --last 1d`
-
-### 6. 定时巡检与报告
 
 ```bash
 ai-verify monitor start --interval 6h
 ai-verify report --period weekly
-```
-
-### 7. 报警（可选）
-
-```bash
 ai-verify alert set https://你的飞书或钉钉webhook
 ai-verify alert test
 ```
 
-## 配置文件
+## Cursor Auto Usage
+
+只读本机元数据（不读 prompt/response 正文）。Cursor 未公开承诺每个 Auto 任务的底层模型；输出保留 **confidence**、**factual / inferred** 分轨与 `pending-infer`，不把推断写成事实，也不宣称云端逐步真名 100% 可知。
+
+```bash
+ai-verify cursor doctor
+ai-verify cursor import --since 30d
+ai-verify cursor tasks --limit 5
+ai-verify cursor task --latest
+ai-verify cursor board
+ai-verify cursor report --period weekly
+```
+
+可选：`ai-verify cursor hooks install` 补采 hook 事件中的 model 字段。
+
+设计与验收细节见 [`docs/CURSOR_AUTO_USAGE.md`](docs/CURSOR_AUTO_USAGE.md)。
+
+## 配置与数据
 
 `~/.ai-verify/config.yaml`，数据在 `~/.ai-verify/data/ai_verify.db`。
 
@@ -114,14 +111,14 @@ ai-verify alert test
 
 ```bash
 pip install -e ".[dev]"
-pytest
+pytest -q tests -k "not ml_optional"
 black ai_verify/
 ruff check ai_verify/
 python -m build
 ```
 
-文件职责索引见 [`docs/FILE_INVENTORY.md`](docs/FILE_INVENTORY.md)。
-当前阶段状态与下一会话交接见 [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)。
+文件职责索引：[`docs/FILE_INVENTORY.md`](docs/FILE_INVENTORY.md)  
+阶段交接：[`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)
 
 ## License
 

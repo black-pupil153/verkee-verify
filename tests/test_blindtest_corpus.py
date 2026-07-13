@@ -170,6 +170,64 @@ def test_build_corpus_joins_labels(tmp_path):
     assert corpus.stats["class_counts"] == {"model-x": 2, "model-y": 1}
 
 
+def test_hook_model_id_outranks_structured_log(tmp_path):
+    projects = tmp_path / "projects"
+    logs = tmp_path / "logs"
+    _write_transcript(
+        projects,
+        "conv-h",
+        [
+            (
+                "<timestamp>Friday, Jul 3, 2026, 10:12 AM (UTC+8)</timestamp>\nq1",
+                [{"text": "```python\ndef hello_world():\n    return 1\n```"}],
+            )
+        ],
+    )
+    _write_structured_log(
+        logs,
+        [
+            (
+                "2026-07-03 10:12:20.000",
+                "Starting stream request",
+                "rid-h1",
+                "conv-h",
+                "model-from-log",
+                None,
+            )
+        ],
+    )
+    tracking = tmp_path / "tracking.db"
+    _write_tracking_db(tracking, [("rid-h1", "conv-h", "model-from-hash")])
+    hook_path = tmp_path / "hooks.ndjson"
+    hook_path.write_text(
+        json.dumps(
+            {
+                "hook_event": "stop",
+                "received_at": "2026-07-03T10:12:25",
+                "payload": {
+                    "conversation_id": "conv-h",
+                    "generation_id": "rid-h1",
+                    "model": "default",
+                    "model_id": "hook-claude",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    corpus = build_corpus(
+        projects_dir=projects,
+        logs_dir=logs,
+        tracking_db=tracking,
+        hook_event_paths=[hook_path],
+    )
+    assert len(corpus.samples) == 1
+    sample = corpus.samples[0]
+    assert sample.label == "hook-claude"
+    assert sample.label_source == "hook"
+    assert sample.features.get("code_present") == 1.0
+
+
 def test_build_corpus_drops_unlabeled_by_default(tmp_path):
     projects = tmp_path / "projects"
     logs = tmp_path / "logs"

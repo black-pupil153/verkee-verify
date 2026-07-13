@@ -3,8 +3,8 @@
 
 设计原则：
 - 全部特征确定性可复现（哈希用 md5，不依赖 PYTHONHASHSEED）
-- 隐私友好：n-gram 只存哈希桶频率，不落原文
-- 三类特征：文风（text style）/ 行为（tool call behavior）/ 时延（latency）
+- 隐私友好：n-gram / 标识符只存哈希桶频率，不落原文或代码正文
+- 特征族：文风（text）/ 行为（tools）/ 时延（latency）/ 轻量代码风格（LPcodedec 思路）
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from typing import Dict, List, Optional
 CHAR_NGRAM_BUCKETS = 64
 TOOL_NAME_BUCKETS = 16
 OPENING_BUCKETS = 16
+IDENT_BUCKETS = 16
 
 _BULLET_RE = re.compile(r"^\s*[-*•]\s+")
 _NUMBERED_RE = re.compile(r"^\s*\d+[.、)]\s+")
@@ -29,8 +30,13 @@ _TABLE_RE = re.compile(r"^\s*\|.*\|\s*$")
 _BOLD_RE = re.compile(r"\*\*[^*\n]+\*\*")
 _INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 _FENCE_RE = re.compile(r"^```", re.MULTILINE)
+_FENCE_BLOCK_RE = re.compile(r"```[\w.+-]*\n(.*?)```", re.DOTALL)
 _SENTENCE_SPLIT_RE = re.compile(r"[。！？!?]|\.(?:\s|$)|\n")
 _LATIN_WORD_RE = re.compile(r"[A-Za-z]{2,}")
+_SNAKE_RE = re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b")
+_CAMEL_RE = re.compile(r"\b[a-z]+(?:[A-Z][a-z0-9]*)+\b")
+_PASCAL_RE = re.compile(r"\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+\b")
+_IDENT_RE = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]{2,}\b")
 
 
 @dataclass
@@ -244,13 +250,100 @@ def _latency_features(turn: TurnRecord) -> Dict[str, float]:
     return feats
 
 
+def _extract_code_blobs(text: str) -> str:
+    """Pull fenced code only — never store raw blobs, only derived stats."""
+    blocks = _FENCE_BLOCK_RE.findall(text)
+    if blocks:
+        return "\n".join(blocks)
+    # Fallback: lines that look like indented code without fences
+    code_lines = [
+        ln
+        for ln in text.split("\n")
+        if ln.startswith("    ") or ln.startswith("\t") or ln.strip().startswith(("def ", "class ", "function ", "import ", "from "))
+    ]
+    return "\n".join(code_lines)
+
+
+def _code_style_features(text: str) -> Dict[str, float]:
+    """Lightweight LPcodedec-inspired code stylometry (hashed / ratios only)."""
+    feats: Dict[str, float] = {}
+    code = _extract_code_blobs(text)
+    n = len(code)
+    feats["code_chars_log"] = math.log1p(n)
+    feats["code_present"] = 1.0 if n > 0 else 0.0
+    if n == 0:
+        return feats
+
+    lines = code.split("\n")
+    n_lines = max(1, len(lines))
+    comment_lines = sum(
+        1
+        for ln in lines
+        if ln.lstrip().startswith(("#", "//", "/*", "*", "--"))
+    )
+    blank = sum(1 for ln in lines if not ln.strip())
+    feats["code_comment_line_ratio"] = comment_lines / n_lines
+    feats["code_blank_line_ratio"] = blank / n_lines
+    feats["code_avg_line_len"] = n / n_lines
+
+    snake = len(_SNAKE_RE.findall(code))
+    camel = len(_CAMEL_RE.findall(code))
+    pascal = len(_PASCAL_RE.findall(code))
+    naming_total = max(1, snake + camel + pascal)
+    feats["code_snake_ratio"] = snake / naming_total
+    feats["code_camel_ratio"] = camel / naming_total
+    feats["code_pascal_ratio"] = pascal / naming_total
+
+    idents = _IDENT_RE.findall(code)
+    if idents:
+        buckets = [0] * IDENT_BUCKETS
+        for ident in idents[:500]:
+            buckets[_hash_bucket(ident.lower(), IDENT_BUCKETS)] += 1
+        total = sum(buckets) or 1
+        for i, c in enumerate(buckets):
+            if c:
+                feats[f"code_id_h{i:02d}"] = c / total
+        feats["code_ident_avg_len"] = sum(len(i) for i in idents) / len(idents)
+
+    # Structural punctuation density (no AST dependency)
+    for name, chs in (
+        ("brace", "{}"),
+        ("paren", "()"),
+        ("bracket", "[]"),
+        ("semicolon", ";"),
+        ("colon", ":"),
+    ):
+        feats[f"code_{name}_per_kb"] = _per_kb(sum(code.count(c) for c in chs), n)
+
+    return feats
+
+
+def _text_extra_features(text: str) -> Dict[str, float]:
+    """Small text-side enhancements without heavy NLP deps."""
+    feats: Dict[str, float] = {}
+    n = len(text)
+    if n == 0:
+        return feats
+    # Question / hedge markers (language-agnostic counts)
+    feats["txt_qmark_per_kb"] = _per_kb(text.count("?") + text.count("？"), n)
+    hedges = ("可能", "或许", "大概", "might", "perhaps", "probably", "seems")
+    hedge_hits = sum(text.lower().count(h) for h in hedges)
+    feats["txt_hedge_per_kb"] = _per_kb(hedge_hits, n)
+    # Code-to-prose balance already partially in fence_count; add ratio of fenced chars
+    code = _extract_code_blobs(text)
+    feats["txt_code_char_ratio"] = len(code) / max(1, n)
+    return feats
+
+
 def extract_features(turn: TurnRecord) -> Dict[str, float]:
-    """确定性特征提取：文风 + n-gram + 开场 + 行为 + 时延。"""
+    """确定性特征提取：文风 + n-gram + 开场 + 行为 + 时延 + 代码风格。"""
     text = turn.full_text
     feats: Dict[str, float] = {}
     feats.update(_text_style_features(text))
+    feats.update(_text_extra_features(text))
     feats.update(_char_ngram_features(text))
     feats.update(_opening_features(turn.assistant_texts))
     feats.update(_behavior_features(turn))
     feats.update(_latency_features(turn))
+    feats.update(_code_style_features(text))
     return feats

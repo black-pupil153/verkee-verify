@@ -74,10 +74,23 @@ class CursorModelEvent:
     confidence: str = "low"
     generated_units: int = 0
     ttft_ms: Optional[int] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    duration_ms: Optional[int] = None
     status: str = "unknown"
     error_text: Optional[str] = None
     unified_mode: Optional[str] = None
     timestamp: Optional[str] = None
+
+
+def _hook_resolved_model(hook: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Prefer normalized model_id over display model slug from hook payloads."""
+    if not hook:
+        return None
+    for key in ("model_id", "model"):
+        if _is_real_model(hook.get(key)):
+            return hook[key]
+    return None
 
 
 def merge_turn(
@@ -97,22 +110,23 @@ def merge_turn(
     tracking = sources.get("ai_tracking")
     hook = sources.get("hook")
     summary = sources.get("conversation_summary")
+    hook_model = _hook_resolved_model(hook)
     if tracking and tracking.get("model"):
         tracking_model = tracking["model"]
         if tracking_model != "default":
             resolved = tracking_model
             confidence = "high"
             event_source = "ai_tracking_db"
-        elif hook and _is_real_model(hook.get("model")):
-            resolved = hook["model"]
+        elif hook_model:
+            resolved = hook_model
             confidence = "high"
             event_source = "hook"
         elif summary and _is_real_model(summary.get("model")):
             resolved = summary["model"]
             confidence = "medium"
             event_source = "conversation_summary"
-    elif hook and _is_real_model(hook.get("model")):
-        resolved = hook["model"]
+    elif hook_model:
+        resolved = hook_model
         confidence = "high"
         event_source = "hook"
     elif sources.get("catalog_model_id"):
@@ -142,6 +156,25 @@ def merge_turn(
     if tracking and tracking.get("count"):
         generated_units = max(generated_units, int(tracking.get("count") or 0))
 
+    input_tokens = sources.get("input_tokens")
+    output_tokens = sources.get("output_tokens")
+    duration_ms = sources.get("duration_ms")
+    if hook:
+        if input_tokens is None:
+            input_tokens = hook.get("input_tokens")
+        if output_tokens is None:
+            output_tokens = hook.get("output_tokens")
+        if duration_ms is None:
+            duration_ms = hook.get("duration_ms")
+
+    def _as_int(value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
     return CursorModelEvent(
         task_id=task_id,
         request_id=request_id,
@@ -153,6 +186,9 @@ def merge_turn(
         confidence=confidence,
         generated_units=generated_units,
         ttft_ms=ttft,
+        input_tokens=_as_int(input_tokens),
+        output_tokens=_as_int(output_tokens),
+        duration_ms=_as_int(duration_ms),
         status=status,
         error_text=sources.get("error_text"),
         unified_mode=sources.get("unified_mode"),
@@ -214,10 +250,21 @@ class TaskUsageReport:
     resolution_rate: float = 0.0
     request_shares: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     output_shares: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    # Dual-track Auto transparency: factual telemetry vs blindtest inference.
+    factual_request_shares: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    factual_output_shares: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    inferred_request_shares: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    coverage: float = 0.0  # (fact ∪ inferred) / requests for auto/mixed
+    pending_infer_count: int = 0
     status_counts: Dict[str, int] = field(default_factory=dict)
     confidence_counts: Dict[str, int] = field(default_factory=dict)
     subagents: List[Dict[str, Any]] = field(default_factory=list)
     per_request: List[Dict[str, Any]] = field(default_factory=list)
+
+
+PENDING_INFER_BUCKET = "pending-infer"
+# Legacy alias kept for test/fixture compatibility during migration.
+AUTO_OPAQUE_BUCKET = "auto-opaque"
 
 
 class CursorUsageImporter:
@@ -448,13 +495,18 @@ class CursorUsageImporter:
             for hook_ev in hook_events:
                 result.hook_events_seen += 1
                 is_subagent = hook_ev.hook_event in ("subagentStart", "subagentStop")
-                if (
-                    is_subagent
-                    and _is_real_model(hook_ev.subagent_model)
-                    and hook_ev.subagent_id
-                ):
+                if is_subagent:
+                    # subagentStop often omits subagent_model; fall back to model fields.
+                    # Never treat these as parent-task turns (avoids bubble IDs as top-level).
+                    sub_model = (
+                        hook_ev.subagent_model
+                        or hook_ev.model_id
+                        or hook_ev.model
+                    )
                     tid = hook_ev.subagent_id
                     parent = hook_ev.parent_conversation_id or hook_ev.conversation_id
+                    if not (tid and parent and _is_real_model(sub_model)):
+                        continue
                     rid = (
                         hook_ev.generation_id
                         or f"hook-{tid}-{hook_ev.received_at or 'unknown'}"
@@ -463,14 +515,25 @@ class CursorUsageImporter:
                     bucket = turn_data.setdefault(
                         key, {"task_id": tid, "request_id": rid}
                     )
-                    bucket["selected_model"] = hook_ev.subagent_model
-                    bucket["hook"] = {"model": hook_ev.subagent_model}
+                    bucket["selected_model"] = sub_model
+                    bucket["hook"] = {
+                        "model": sub_model,
+                        "model_id": hook_ev.model_id or sub_model,
+                        "input_tokens": hook_ev.input_tokens,
+                        "output_tokens": hook_ev.output_tokens,
+                        "duration_ms": hook_ev.duration_ms,
+                    }
                     bucket["parent_task_id"] = parent
                     bucket["timestamp"] = hook_ev.received_at
                     bucket["status"] = hook_ev.status or bucket.get("status")
+                    if hook_ev.input_tokens is not None:
+                        bucket["input_tokens"] = hook_ev.input_tokens
+                    if hook_ev.output_tokens is not None:
+                        bucket["output_tokens"] = hook_ev.output_tokens
+                    if hook_ev.duration_ms is not None:
+                        bucket["duration_ms"] = hook_ev.duration_ms
                     result.hook_events_resolved += 1
-                    if parent:
-                        task_meta.setdefault(parent, {})
+                    task_meta.setdefault(parent, {})
                     continue
 
                 hook_model = hook_ev.model_id or hook_ev.model
@@ -485,9 +548,21 @@ class CursorUsageImporter:
                 )
                 if hook_ev.model:
                     bucket["selected_model"] = hook_ev.model
-                bucket["hook"] = {"model": hook_model}
+                bucket["hook"] = {
+                    "model": hook_model,
+                    "model_id": hook_ev.model_id or hook_model,
+                    "input_tokens": hook_ev.input_tokens,
+                    "output_tokens": hook_ev.output_tokens,
+                    "duration_ms": hook_ev.duration_ms,
+                }
                 bucket["timestamp"] = bucket.get("timestamp") or hook_ev.received_at
                 bucket["status"] = hook_ev.status or bucket.get("status")
+                if hook_ev.input_tokens is not None:
+                    bucket["input_tokens"] = hook_ev.input_tokens
+                if hook_ev.output_tokens is not None:
+                    bucket["output_tokens"] = hook_ev.output_tokens
+                if hook_ev.duration_ms is not None:
+                    bucket["duration_ms"] = hook_ev.duration_ms
                 result.hook_events_resolved += 1
 
             self.db.save_cursor_import_state(
@@ -507,6 +582,10 @@ class CursorUsageImporter:
         # 3) upsert events
         events_saved = 0
         tasks_seen: Set[str] = set()
+        child_task_ids: Set[str] = set()
+        child_parent: Dict[str, str] = {}
+
+        self.db.purge_malformed_cursor_ids()
 
         for (tid, rid), sources in turn_data.items():
             parent = sources.get("parent_task_id") or subagent_map.get(tid)
@@ -524,20 +603,31 @@ class CursorUsageImporter:
                     "event_source": merged.event_source,
                     "confidence": merged.confidence,
                     "generated_units": merged.generated_units,
+                    "input_tokens": merged.input_tokens,
+                    "output_tokens": merged.output_tokens,
                     "ttft_ms": merged.ttft_ms,
+                    "latency_ms": merged.duration_ms,
                     "status": merged.status,
                     "error_text": merged.error_text,
                     "timestamp": merged.timestamp,
                 }
             )
             events_saved += 1
-            tasks_seen.add(tid)
             if parent:
+                child_task_ids.add(tid)
+                child_parent[tid] = parent
                 tasks_seen.add(parent)
+            else:
+                tasks_seen.add(tid)
 
-        # 4) upsert tasks
+        # Drop stale top-level rows for subagent / malformed child IDs.
+        self.db.delete_cursor_tasks(sorted(child_task_ids))
+
+        # 4) upsert tasks (parents only — subagents stay as events under parent)
         tasks_saved = 0
         for tid in tasks_seen:
+            if tid in child_task_ids:
+                continue
             header = headers.get(tid, {})
             meta = task_meta.get(tid, {})
             title = header.get("subtitle") or header.get("title")
@@ -554,7 +644,9 @@ class CursorUsageImporter:
             else:
                 route_kind = "unknown"
 
-            sub_count = sum(1 for sid, pid in subagent_map.items() if pid == tid)
+            sub_ids = {sid for sid, pid in subagent_map.items() if pid == tid}
+            sub_ids |= {sid for sid, pid in child_parent.items() if pid == tid}
+            sub_count = len(sub_ids)
             started = meta.get("started_at")
             ended = meta.get("ended_at")
             if not started and events:
@@ -614,7 +706,11 @@ def _is_resolved_model(model: Optional[str]) -> bool:
 
 
 def _bucket_label(ev: Dict[str, Any]) -> str:
-    """Map event to display bucket: real model, auto-opaque, or unknown."""
+    """Map event to display bucket: real model, pending-infer, or unknown.
+
+    ``pending-infer`` replaces the former auto-opaque terminal bucket: Auto turns
+    without a factual resolved model should be filled by the inference track.
+    """
     resolved = ev.get("resolved_model")
     if _is_resolved_model(resolved):
         return resolved  # type: ignore[return-value]
@@ -624,8 +720,36 @@ def _bucket_label(ev: Dict[str, Any]) -> str:
         return selected  # type: ignore[return-value]
 
     if ev.get("route_kind") == "auto":
-        return "auto-opaque"
+        return PENDING_INFER_BUCKET
     return "unknown"
+
+
+def _shares_from_counts(counts: Dict[str, int]) -> Dict[str, Dict[str, Any]]:
+    total = sum(counts.values()) or 1
+    return {
+        m: {"pct": c / total * 100, "count": c}
+        for m, c in sorted(counts.items(), key=lambda x: -x[1])
+    }
+
+
+def _load_inferred_by_request(db: Database, task_id: str) -> Dict[str, Dict[str, Any]]:
+    """Map request_id -> latest blindtest inference row (non-null model)."""
+    try:
+        from ai_verify.monitor.blindtest_view import get_inferred_view
+    except ImportError:
+        return {}
+    view = get_inferred_view(db, task_id)
+    if not view:
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    for pt in view.per_turn:
+        if not pt.inferred_model or not pt.request_id:
+            continue
+        out[pt.request_id] = {
+            "inferred_model": pt.inferred_model,
+            "probability": pt.probability,
+        }
+    return out
 
 
 def aggregate_task(db: Database, task_id: str) -> Optional[TaskUsageReport]:
@@ -662,50 +786,72 @@ def aggregate_task(db: Database, task_id: str) -> Optional[TaskUsageReport]:
         ):
             by_request[rid] = ev
 
+    inferred_by_req = _load_inferred_by_request(db, task_id)
+
     request_model_counts: Dict[str, int] = defaultdict(int)
     output_model_counts: Dict[str, int] = defaultdict(int)
+    factual_req_counts: Dict[str, int] = defaultdict(int)
+    factual_out_counts: Dict[str, int] = defaultdict(int)
+    inferred_req_counts: Dict[str, int] = defaultdict(int)
     status_counts: Dict[str, int] = defaultdict(int)
     confidence_counts: Dict[str, int] = defaultdict(int)
 
     per_request: List[Dict[str, Any]] = []
     resolved_requests = 0
+    covered = 0
+    pending_infer_count = 0
     for rid, ev in sorted(
         by_request.items(), key=lambda x: x[1].get("timestamp") or ""
     ):
         bucket = _bucket_label(ev)
-        request_model_counts[bucket] += 1
+        factual = _is_resolved_model(ev.get("resolved_model")) or _is_resolved_model(
+            ev.get("selected_model")
+        )
+        inf = inferred_by_req.get(rid)
+        display_bucket = bucket
+        if bucket == PENDING_INFER_BUCKET and inf:
+            display_bucket = inf["inferred_model"]
+            inferred_req_counts[display_bucket] += 1
+            covered += 1
+        elif factual:
+            covered += 1
+            factual_req_counts[bucket] += 1
+        elif bucket == PENDING_INFER_BUCKET:
+            pending_infer_count += 1
+        else:
+            covered += 1  # unknown still "labeled" as unknown
+
+        request_model_counts[display_bucket] += 1
         if _is_resolved_model(ev.get("resolved_model")):
             resolved_requests += 1
         status_counts[ev.get("status") or "unknown"] += 1
         confidence_counts[ev.get("confidence") or "low"] += 1
         units = int(ev.get("generated_units") or 0)
         if units > 0:
-            output_model_counts[bucket] += units
+            output_model_counts[display_bucket] += units
+            if factual:
+                factual_out_counts[bucket] += units
         per_request.append(
             {
                 "request_id": rid,
                 "selected_model": ev.get("selected_model"),
                 "resolved_model": ev.get("resolved_model"),
+                "inferred_model": (inf or {}).get("inferred_model"),
+                "inferred_probability": (inf or {}).get("probability"),
                 "status": ev.get("status"),
                 "units": units,
                 "confidence": ev.get("confidence"),
+                "input_tokens": ev.get("input_tokens"),
+                "output_tokens": ev.get("output_tokens"),
+                "bucket": display_bucket,
             }
         )
 
     total_requests = sum(request_model_counts.values()) or 1
     total_output = sum(output_model_counts.values()) or 1
     resolution_rate = resolved_requests / total_requests if total_requests else 0.0
-
-    request_shares = {
-        m: {"pct": c / total_requests * 100, "count": c}
-        for m, c in sorted(request_model_counts.items(), key=lambda x: -x[1])
-    }
-    output_shares = {
-        m: {"pct": c / total_output * 100, "count": c}
-        for m, c in sorted(output_model_counts.items(), key=lambda x: -x[1])
-    }
-
-    subagents = db.get_cursor_subagents(task_id)
+    n_req = len(by_request) or 1
+    coverage = covered / n_req
 
     return TaskUsageReport(
         task_id=task_id,
@@ -716,14 +862,27 @@ def aggregate_task(db: Database, task_id: str) -> Optional[TaskUsageReport]:
         ended_at=task.get("ended_at"),
         request_count=len(by_request),
         code_unit_count=sum(output_model_counts.values()),
-        subagent_count=len(subagents),
+        subagent_count=len(db.get_cursor_subagents(task_id)),
         resolved_requests=resolved_requests,
         resolution_rate=resolution_rate,
-        request_shares=request_shares,
-        output_shares=output_shares,
+        request_shares=_shares_from_counts(request_model_counts),
+        output_shares=_shares_from_counts(output_model_counts)
+        if output_model_counts
+        else {},
+        factual_request_shares=_shares_from_counts(factual_req_counts)
+        if factual_req_counts
+        else {},
+        factual_output_shares=_shares_from_counts(factual_out_counts)
+        if factual_out_counts
+        else {},
+        inferred_request_shares=_shares_from_counts(inferred_req_counts)
+        if inferred_req_counts
+        else {},
+        coverage=coverage,
+        pending_infer_count=pending_infer_count,
         status_counts=dict(status_counts),
         confidence_counts=dict(confidence_counts),
-        subagents=subagents,
+        subagents=db.get_cursor_subagents(task_id),
         per_request=per_request,
     )
 
@@ -865,7 +1024,7 @@ def get_model_scores(
     latest = {row["model"]: row for row in db.get_latest_scores(hours=hours)}
     result: Dict[str, Optional[Dict[str, Any]]] = {}
     for model in models:
-        if model in ("unknown", "default", "", "auto-opaque"):
+        if model in ("unknown", "default", "", "auto-opaque", PENDING_INFER_BUCKET):
             continue
         if model in latest:
             result[model] = latest[model]
@@ -898,12 +1057,16 @@ def cursor_usage_insights(period: "PeriodUsageReport") -> List[str]:
                 )
 
     unknown_pct = req.get("unknown", {}).get("pct", 0)
-    opaque_pct = req.get("auto-opaque", {}).get("pct", 0)
-    if opaque_pct >= 20:
-        opaque_units = out.get("auto-opaque", {}).get("count", 0)
+    pending_pct = req.get(PENDING_INFER_BUCKET, {}).get("pct", 0) or req.get(
+        "auto-opaque", {}
+    ).get("pct", 0)
+    if pending_pct >= 20:
+        pending_units = out.get(PENDING_INFER_BUCKET, {}).get("count", 0) or out.get(
+            "auto-opaque", {}
+        ).get("count", 0)
         insights.append(
-            f"auto-opaque 请求占 {opaque_pct:.0f}%（{opaque_units} code units 模型不可见），"
-            "运行 ai-verify cursor recommend 查看建议"
+            f"pending-infer 请求占 {pending_pct:.0f}%（{pending_units} code units 待推断），"
+            "可 train 盲测后查看推断轨，或运行 ai-verify cursor recommend"
         )
     elif unknown_pct >= 20:
         insights.append(
@@ -921,6 +1084,7 @@ def render_task_score_table(report: TaskUsageReport, db: Database) -> Table:
     models = set(report.output_shares.keys()) | set(report.request_shares.keys())
     models.discard("unknown")
     models.discard("auto-opaque")
+    models.discard(PENDING_INFER_BUCKET)
     scores = get_model_scores(db, sorted(models))
 
     table = Table(title="模型占比 × 智力分", expand=True)

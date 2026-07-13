@@ -1,5 +1,7 @@
 """盲测特征提取测试"""
 
+import json
+
 from ai_verify.blindtest.features import TurnRecord, extract_features
 
 
@@ -79,3 +81,39 @@ def test_empty_turn():
     feats = extract_features(_make_turn())
     assert feats["txt_chars_log"] == 0.0
     assert feats["beh_tools_total_log"] == 0.0
+
+
+def test_code_style_features_hashed_not_raw():
+    code = (
+        "```python\n"
+        "def fetch_user_data(user_id):\n"
+        "    # load profile\n"
+        "    return UserProfile(userId=user_id)\n"
+        "```"
+    )
+    feats = extract_features(_make_turn(assistant_texts=[code]))
+    assert feats["code_present"] == 1.0
+    assert feats["code_chars_log"] > 0
+    assert feats["code_snake_ratio"] > 0
+    assert feats["code_comment_line_ratio"] > 0
+    assert feats["txt_code_char_ratio"] > 0
+    # Privacy: feature keys/values must not embed source identifiers or raw code.
+    blob = json.dumps(feats)
+    assert "fetch_user_data" not in blob
+    assert "UserProfile" not in blob
+    assert "load profile" not in blob
+    assert any(k.startswith("code_id_h") for k in feats)
+
+
+def test_code_style_deterministic():
+    text = "```js\nfunction getUserName() {\n  return user_name;\n}\n```"
+    t = _make_turn(assistant_texts=[text])
+    assert extract_features(t) == extract_features(t)
+
+
+def test_text_extra_features():
+    feats = extract_features(
+        _make_turn(assistant_texts=["这可能有问题？ Perhaps we should check."])
+    )
+    assert feats["txt_qmark_per_kb"] > 0
+    assert feats["txt_hedge_per_kb"] > 0

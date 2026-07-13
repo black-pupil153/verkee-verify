@@ -1,9 +1,11 @@
-# Cursor Auto Usage — 完整实施规划
+# Cursor Auto Usage — 设计与验收
 
-> 版本：v1.0  
-> 日期：2026-07-09  
-> 状态：待实施  
-> 适用范围：ai-verify 新会话直接按本文执行
+> 版本：v1.1  
+> 日期：2026-07-11  
+> 状态：**已实现并完成本机验收**（P0–P2.5 代码与测试已落地）  
+> 适用范围：设计依据 + 维护说明；**不要**按旧「从零实现」清单重做功能
+
+权威交接与下一阶段优先级见 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)。
 
 ---
 
@@ -456,19 +458,19 @@ Task 906dea0f-be35-471a-a97e-df528b6b9090
 
 ## 8. 实施阶段
 
-### P0：`cursor doctor`（0.5 天）
+### P0：`cursor doctor`（0.5 天）— **已完成**
 
 **交付**：
 
-- [ ] `providers/cursor.py`：路径发现 + schema 探测
-- [ ] `cli.py`：`cursor doctor`
-- [ ] 测试：`tests/test_cursor_paths.py`（mock 路径）
+- [x] `providers/cursor.py`：路径发现 + schema 探测
+- [x] `cli.py`：`cursor doctor`
+- [x] 测试：`tests/test_cursor_paths.py`（mock 路径）
 
-**验收**：在本机跑出上述 doctor 输出。
+**验收**：在本机跑出 doctor 输出（见 §8.5）。
 
 ---
 
-### P1：离线导入 + 报表（2–3 天）— **MVP**
+### P1：离线导入 + 报表（2–3 天）— **MVP 已完成**
 
 **交付**：
 
@@ -498,10 +500,11 @@ flowchart TD
 
 **测试**：
 
-- [ ] `tests/fixtures/cursor/structured_log_sample.log`
-- [ ] `tests/fixtures/cursor/ai_tracking_sample.db`（最小 schema）
-- [ ] `tests/test_cursor_logs.py`
-- [ ] `tests/test_cursor_usage.py`：聚合逻辑、置信度、dedupe
+- [x] `tests/fixtures/cursor/structured_log_sample.log`
+- [x] `tests/fixtures/cursor/create_ai_tracking_sample.py`（最小 schema）
+- [x] `tests/fixtures/cursor/hook_subagent_malformed.ndjson`（脱敏 hook 夹具）
+- [x] `tests/test_cursor_logs.py`
+- [x] `tests/test_cursor_usage.py`：聚合逻辑、置信度、dedupe、hook 清洗
 
 **验收**：
 
@@ -514,19 +517,19 @@ ai-verify cursor task 906dea0f-be35-471a-a97e-df528b6b9090
 
 ---
 
-### P2：看板 + 周报（1–2 天）
+### P2：看板 + 周报（1–2 天）— **已完成**
 
 **交付**：
 
-- [ ] `dashboard_cursor.py`：`cursor board [--watch]`
-- [ ] `report.py`：增加 Cursor 章节
-- [ ] `cli.py`：`cursor report --period weekly`
+- [x] `dashboard_cursor.py`：`cursor board [--watch]`
+- [x] `report.py`：增加 Cursor 章节
+- [x] `cli.py`：`cursor report --period weekly`
 
 复用 `dashboard.py` 的 Rich Table / sparkline 风格。
 
 ---
 
-### P2.5：Cursor Hook 补采（可选，1 天）
+### P2.5：Cursor Hook 补采（可选，1 天）— **已完成**
 
 **触发**：P1 完成后，若 `unknown` 占比过高再实施。
 
@@ -542,12 +545,12 @@ ai-verify cursor task 906dea0f-be35-471a-a97e-df528b6b9090
 }
 ```
 
-Hook 脚本 append 到 `~/.ai-verify/cursor-events.ndjson`，`import` 时作为 `event_source=hook` 合并。  
-**实施前先验证** hook stdin JSON 是否含 model 字段。
+Hook 脚本 append 到 `~/.ai-verify/cursor-hook-probe.ndjson`，`import` 时作为 `event_source=hook` 合并。  
+**本机已验证**：hook stdin 含 `model` / `model_id` / `subagent_model`；`subagent_id` 偶发带引号与嵌入换行，导入侧用 `normalize_cursor_id` 清洗，且子任务不进入顶层 `cursor tasks` 列表。
 
 ---
 
-### P3：质量关联（1–2 天）
+### P3：质量关联（1–2 天）— **部分完成**
 
 ```bash
 ai-verify cursor task <id> --score
@@ -559,13 +562,31 @@ ai-verify cursor task <id> --score
 2. 无记录则调 `VerifyEngine.verify(quick=True)` 补测
 3. 输出：模型占比 + 智力分 + 偏差
 
+CLI `--score` 与 `get_model_scores()` 已有；完整 VerifyEngine 按模型补测仍可按需加深。
+
 ---
 
-### P4：Token / 费用（按需）
+### P4：Token / 费用（按需）— **未做**
 
 - 扫描 logs 是否新增 token 字段
 - 有则填入 `input_tokens` / `output_tokens`
 - 无则 UI 显示 `—`，**不估算**
+
+本机 doctor 仍报告 `tokens (unknown)`。
+
+---
+
+### 8.5 本机验收结果（2026-07-11）
+
+| 项 | 结果 |
+|----|------|
+| Cursor 版本 | 3.10.20 |
+| doctor | ai-tracking ✓、structured logs 66 files ✓、composerHeaders 82 ✓、transcripts ✓ |
+| import `--since 30d --full` | 任务/事件可导入；hook 10 条中 resolved 6 |
+| 任务 `906dea0f` 产出占比 | claude-fable-5 **64.2%** / grok-4.5 **35.8%**（符合设计验收） |
+| Auto 任务 | 无事实 → `pending-infer`（待盲测覆盖）；报表分轨 `factual_*` / `inferred_*` + `coverage`；保留 confidence / unknown |
+| 标题 | 仅当 `composerId` 与 task_id 对齐时有 subtitle；Glass/agent-transcript 任务常为「(无标题)」——不读 prompt 补标题 |
+| 回归 | `pytest -q tests -k "not ml_optional"` → **110 passed** |
 
 ---
 
@@ -599,22 +620,22 @@ ai-verify cursor task --latest
 
 ---
 
-## 11. 新会话执行清单（Copy-Paste Ready）
+## 11. 维护清单（本机验证 + 修 bug）
 
-按顺序执行：
+按顺序执行；**不要**从零重建 P0/P1 模块：
 
 ```
-1. 创建 providers/cursor.py（路径 + schema 探测）
-2. 创建 cursor_logs.py（log 解析器 + fixtures）
-3. 扩展 storage/database.py（三表 + 方法）
-4. 创建 monitor/cursor_usage.py（导入 + 聚合）
-5. cli.py 增加 cursor 命令组：doctor → import → tasks → task
-6. 测试：pytest + 本机 doctor/import/task 验证
-7. （可选 P2）dashboard_cursor.py + report 集成
-8. （可选 P3）task --score 质量关联
+1. ai-verify cursor doctor
+2. ai-verify cursor import --since 30d [--full]
+3. ai-verify cursor tasks --limit 5
+4. ai-verify cursor task --latest
+5. 对照已知任务（如 906dea0f）检查产出占比
+6. 若解析/合并异常：修 providers/cursor.py / cursor_logs.py / cursor_usage.py
+7. 补脱敏夹具 + pytest；回归：pytest -q tests -k "not ml_optional"
+8. 更新本节验收表与 PROJECT_STATUS.md
 ```
 
-**MVP 完成定义**：`doctor` + `import` + `tasks` + `task` 四个命令可用，本机任务 `906dea0f` 能正确显示双模型产出占比。
+**MVP 完成定义（已满足）**：`doctor` + `import` + `tasks` + `task` 可用，本机任务 `906dea0f` 双模型产出占比正确。
 
 ---
 
@@ -631,6 +652,9 @@ Cursor Auto     →  「Cursor 背着我用了哪些模型？值不值？」
 ## 13. 新会话开场模板
 
 ```text
-请按 ai-verify/docs/CURSOR_AUTO_USAGE.md 执行 P0+P1 MVP，
-从 providers/cursor.py 和 cursor doctor 开始。
+先阅读 docs/PROJECT_STATUS.md、README.md 和 docs/CURSOR_AUTO_USAGE.md。
+不要重做 Cursor P0/P1：代码和测试已经存在。
+先在本机运行 ai-verify cursor doctor、cursor import --since 30d、cursor tasks --limit 5、cursor task --latest，
+根据真实输出补齐问题、测试与文档；保持 confidence/unknown 和隐私边界。
+回归使用：venv/bin/python -m pytest -q tests -k "not ml_optional"。
 ```

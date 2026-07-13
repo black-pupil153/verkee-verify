@@ -132,3 +132,12 @@ def test_analyze_all_default(tmp_path):
     )
     result = analyze_probe_ndjson(ndjson)
     assert result.provides_resolved_model is False
+
+
+def test_normalize_cursor_id_strips_quotes_and_newline():
+    from ai_verify.cursor_hook_events import normalize_cursor_id
+
+    raw = "'call_SNFbIpOhES8G3CWx9LnrzQg7\nfc_014b39426f78f4ba016a505a00d948819fb65f20c819420394'"
+    assert normalize_cursor_id(raw) == "call_SNFbIpOhES8G3CWx9LnrzQg7"
+    assert normalize_cursor_id("task-ok") == "task-ok"
+    assert normalize_cursor_id(None) is None

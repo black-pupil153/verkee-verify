@@ -2,9 +2,13 @@
 盲测语料构建 — 从 agent transcripts 提取 turn 样本并关联模型标签。
 
 标签来源（优先级从高到低）：
-1. structured logs `Starting stream request`(modelName != default)，按 用户消息时间戳 ↔ 请求时间 就近对齐
-2. ai_code_hashes.model（非 default，按对齐得到的 requestId join）
-3. 会话级统一标签：该会话全部请求均为同一非 default 模型时整体打标
+1. hook `model_id`（非 default；按 generation_id / requestId join）— 最高优先级事实
+2. structured logs `Starting stream request`(modelName != default)，按 用户消息时间戳 ↔ 请求时间 就近对齐
+3. ai_code_hashes.model（非 default，按对齐得到的 requestId join）
+4. 会话级统一标签：该会话全部请求均为同一非 default 模型时整体打标
+
+Ground-truth 训练：只用**手选会话**（明确手动选模或 hook/tracking 已给出非 default
+标签的会话）构建语料；纯 Auto / default 不可见请求不得当作 GT 标签。
 
 隐私：语料只保存特征向量与哈希，不落原始文本。
 """
@@ -184,6 +188,7 @@ class LabelIndex:
     def __init__(self) -> None:
         self.by_conversation: Dict[str, List[RequestEvent]] = {}
         self.hash_models: Dict[str, str] = {}  # request_id -> model (非 default)
+        self.hook_models: Dict[str, str] = {}  # request_id -> hook model_id (非 default)
 
     def add_event(self, ev: RequestEvent) -> None:
         self.by_conversation.setdefault(ev.conversation_id, []).append(ev)
@@ -192,13 +197,26 @@ class LabelIndex:
         for events in self.by_conversation.values():
             events.sort(key=lambda e: e.timestamp or datetime.min)
 
+    def resolve_model(
+        self, request_id: Optional[str], event_model: Optional[str] = None
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """返回 (model, label_source)；hook > event > hashes。"""
+        rid = request_id or ""
+        if rid and rid in self.hook_models:
+            return self.hook_models[rid], "hook"
+        if event_model:
+            return event_model, None  # caller sets source from event
+        if rid and rid in self.hash_models:
+            return self.hash_models[rid], "ai_code_hashes"
+        return None, None
+
     def uniform_label(self, conversation_id: str) -> Optional[str]:
         events = self.by_conversation.get(conversation_id, [])
         if not events:
             return None
         models = set()
         for ev in events:
-            model = ev.model or self.hash_models.get(ev.request_id or "")
+            model, _ = self.resolve_model(ev.request_id, ev.model)
             if model is None:
                 return None  # 存在不可见请求 → 不能整体打标
             models.add(model)
@@ -224,13 +242,59 @@ class LabelIndex:
         return ev
 
 
+def _parse_hook_timestamp(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
 def build_label_index(
     logs_dir: Optional[Path] = None,
     tracking_db: Optional[Path] = None,
     ai_verify_db: Optional[Path] = None,
+    hook_event_paths: Optional[List[Path]] = None,
 ) -> LabelIndex:
-    """扫描 structured logs + ai_code_hashes (+ 可选 cursor_model_events) 构建标签索引。"""
+    """扫描 hooks + structured logs + ai_code_hashes (+ 可选 cursor_model_events)。"""
     index = LabelIndex()
+
+    # 0. hooks：model_id 为最高优先级标签（仅非 default）
+    from ai_verify.cursor_hook_events import default_hook_event_paths, iter_hook_events
+
+    if hook_event_paths is not None:
+        paths = hook_event_paths
+    elif logs_dir is None and tracking_db is None:
+        # Full discover mode (CLI) — include default hook NDJSON paths.
+        paths = default_hook_event_paths()
+    else:
+        # Fixture / explicit path mode — do not pull host ~/.ai-verify hooks.
+        paths = []
+    for hook_path in paths:
+        try:
+            for hev in iter_hook_events(hook_path):
+                mid = hev.model_id or hev.subagent_model
+                if not mid or mid == "default":
+                    continue
+                rid = hev.generation_id
+                if rid:
+                    index.hook_models[rid] = mid
+                if hev.conversation_id:
+                    index.add_event(
+                        RequestEvent(
+                            conversation_id=hev.conversation_id,
+                            request_id=rid,
+                            model=mid,
+                            timestamp=_parse_hook_timestamp(hev.received_at),
+                            source="hook",
+                        )
+                    )
+        except OSError:
+            continue
 
     # 1. structured logs：stream_start 提供 (conversation, request, model, ts)，
     #    turn_outcome 提供 ttft_ms
@@ -238,10 +302,10 @@ def build_label_index(
     if logs_dir is None:
         from ai_verify.providers.cursor import discover_cursor_paths, probe_structured_logs
 
-        paths = discover_cursor_paths()
-        if paths.logs_dir:
+        paths_c = discover_cursor_paths()
+        if paths_c.logs_dir:
             log_files = [
-                f for f in probe_structured_logs(paths.logs_dir)
+                f for f in probe_structured_logs(paths_c.logs_dir)
                 if "Structured Logs" in f.name
             ]
     elif logs_dir.is_dir():
@@ -277,7 +341,7 @@ def build_label_index(
             ev.ttft_ms = ttft_by_request.get(ev.request_id)
         index.add_event(ev)
 
-    # 2. ai_code_hashes：requestId -> model（非 default）
+    # 2. ai_code_hashes：requestId -> model（非 default；不覆盖 hook）
     if tracking_db is None:
         from ai_verify.providers.cursor import discover_cursor_paths
 
@@ -288,7 +352,7 @@ def build_label_index(
         for row in read_ai_code_hashes(Path(tracking_db)):
             model = row.get("model")
             rid = row.get("requestId")
-            if rid and model and model != "default":
+            if rid and model and model != "default" and str(rid) not in index.hook_models:
                 index.hash_models[str(rid)] = str(model)
 
     # 3. 可选：ai-verify DB 里 confidence 较高的 resolved_model
@@ -352,12 +416,10 @@ def label_turns(turns: List[TurnRecord], index: LabelIndex) -> None:
         if ev is not None:
             turn.request_id = ev.request_id
             turn.ttft_ms = ev.ttft_ms
-            model = ev.model or index.hash_models.get(ev.request_id or "")
+            model, src = index.resolve_model(ev.request_id, ev.model)
             if model:
                 turn.label = model
-                turn.label_source = (
-                    ev.source if ev.model else "ai_code_hashes"
-                )
+                turn.label_source = src or ev.source
         if turn.label is None and uniform:
             turn.label = uniform
             turn.label_source = "conversation_uniform"
@@ -368,13 +430,17 @@ def build_corpus(
     logs_dir: Optional[Path] = None,
     tracking_db: Optional[Path] = None,
     ai_verify_db: Optional[Path] = None,
+    hook_event_paths: Optional[List[Path]] = None,
     since: Optional[datetime] = None,
     include_unlabeled: bool = False,
     min_turn_chars: int = 1,
 ) -> Corpus:
     """扫描全部 transcripts，产出特征化语料。"""
     index = build_label_index(
-        logs_dir=logs_dir, tracking_db=tracking_db, ai_verify_db=ai_verify_db
+        logs_dir=logs_dir,
+        tracking_db=tracking_db,
+        ai_verify_db=ai_verify_db,
+        hook_event_paths=hook_event_paths,
     )
 
     corpus = Corpus(built_at=datetime.now().isoformat())

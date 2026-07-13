@@ -32,8 +32,12 @@ def build_recommendations(
     """Build recommendation lines based on period stats."""
     lines: List[str] = []
     rate = period.resolution_rate
-    opaque_units = period.output_shares.get("auto-opaque", {}).get("count", 0)
-    opaque_pct = period.output_shares.get("auto-opaque", {}).get("pct", 0)
+    opaque_units = period.output_shares.get("pending-infer", {}).get(
+        "count", 0
+    ) or period.output_shares.get("auto-opaque", {}).get("count", 0)
+    opaque_pct = period.output_shares.get("pending-infer", {}).get(
+        "pct", 0
+    ) or period.output_shares.get("auto-opaque", {}).get("pct", 0)
 
     lines.append(
         f"Auto 可解析率: [bold]{rate * 100:.0f}%[/bold] "
@@ -41,8 +45,8 @@ def build_recommendations(
     )
     if opaque_units:
         lines.append(
-            f"auto-opaque 产出: [yellow]{opaque_units} units[/yellow] "
-            f"({opaque_pct:.1f}% of tracked output)"
+            f"pending-infer 产出: [yellow]{opaque_units} units[/yellow] "
+            f"({opaque_pct:.1f}% of tracked output) — 需盲测推断轨补全"
         )
 
     if rate >= RESOLUTION_THRESHOLD:
@@ -73,22 +77,22 @@ def build_recommendations(
         "[yellow]建议 2:[/yellow] 在 Cursor 模型选择器中关闭 Auto，改选手选高阶模型（如 Claude Sonnet / Composer 2.5）"
     )
     lines.append("  验证: [cyan]ai-verify cursor import --since 1d && ai-verify cursor task --latest[/cyan]")
-    lines.append("  手选后应出现具体 catalogModelId / resolved_model，而非 auto-opaque。")
+    lines.append("  手选后应出现具体 catalogModelId / resolved_model，而非 pending-infer。")
 
     # 建议 3：盲测指纹推断
     if not _blindtest_model_exists():
         lines.append(
-            "[yellow]建议 3:[/yellow] 构建盲测指纹分类器，对 auto-opaque turns 推断底层模型："
+            "[yellow]建议 3:[/yellow] 构建盲测指纹分类器，对 pending-infer turns 推断底层模型："
         )
         lines.append("  [cyan]ai-verify blindtest build-corpus && ai-verify blindtest train[/cyan]")
-        lines.append("  训练后可运行: [cyan]ai-verify cursor task <id> --inferred[/cyan]")
+        lines.append("  训练后默认可在 cursor task 看到推断轨")
     else:
         hint = task_id_hint or "<task_id>"
         lines.append(
-            "[yellow]建议 3:[/yellow] 盲测模型已就绪，可查看 auto-opaque turns 的推断视图："
+            "[yellow]建议 3:[/yellow] 盲测模型已就绪，可查看 pending-infer turns 的推断视图："
         )
         lines.append(f"  [cyan]ai-verify cursor task {hint} --inferred[/cyan]")
-        lines.append("  （独立视图，不计入正式占比，附概率标注）")
+        lines.append("  （推断轨已并入默认展示；--inferred 看逐 turn 细节）")
 
     return lines
 
@@ -103,7 +107,7 @@ def show_recommendations(since: str = "7d") -> None:
         console.print("[yellow]暂无数据，请先运行: ai-verify cursor import --since 7d[/yellow]")
         return
 
-    # 取最近有 auto-opaque 产出的任务作为提示 id
+    # 取最近有 pending-infer 产出的任务作为提示 id
     task_id_hint = None
     if period.latest_report:
         task_id_hint = period.latest_report.task_id[:8]

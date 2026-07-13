@@ -1,6 +1,6 @@
 # AI Verify 文件整理索引
 
-> 更新日期：2026-07-10
+> 更新日期：2026-07-13
 
 本文按用途整理 `ai-verify/` 下的项目文件，帮助后续开发时快速定位入口、核心模块、测试和本地产物。
 
@@ -77,8 +77,8 @@ ai-verify/
 | 文件 | 作用 |
 | --- | --- |
 | `ai_verify/blindtest/__init__.py` | 盲测模块导出入口。 |
-| `ai_verify/blindtest/features.py` | 从会话 turn 中提取文本风格、结构、行为、延迟等特征。 |
-| `ai_verify/blindtest/corpus.py` | 从 Cursor transcripts、logs、tracking DB 构建带标签语料。 |
+| `ai_verify/blindtest/features.py` | 文风 / 行为 / 时延 / 轻量代码风格特征（哈希桶，不落正文）。 |
+| `ai_verify/blindtest/corpus.py` | 从 transcripts、hooks、logs、tracking DB 构建带标签语料（hook `model_id` 优先）。 |
 | `ai_verify/blindtest/classifier.py` | 训练和运行底层模型风格分类器，支持 sklearn 与纯 Python 回退。 |
 
 ### 代理、存储和供应商
@@ -130,7 +130,8 @@ ai-verify/
 
 | 文件 | 作用 |
 | --- | --- |
-| `docs/CURSOR_AUTO_USAGE.md` | Cursor Auto Usage 的数据源、置信度、隐私边界与实施规划；其中阶段状态已落后于现有代码。 |
+| `docs/CURSOR_AUTO_USAGE.md` | Cursor Auto Usage 的数据源、置信度、隐私边界与验收记录（P0–P2.5 已落地）。 |
+| `docs/research/` | Auto 全量透视长检索：综述、文献库、遥测普查、可行性矩阵、实验协议。 |
 | `docs/FILE_INVENTORY.md` | 本文件，整理当前项目文件职责与维护边界。 |
 | `docs/PROJECT_STATUS.md` | 当前阶段、验证结果、产品决策、关键边界与下一会话执行入口。 |
 

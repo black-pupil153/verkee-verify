@@ -582,7 +582,11 @@ def run_doctor(ai_verify_db: Optional[Path] = None) -> DoctorReport:
         ("resolved_model (high)", "via ai_code_hashes.model", "ai_tracking_db"),
         ("request routing (med)", "via structured logs", "structured_log"),
         ("outcome/ttft (med)", "via agent.turn.outcome", "structured_log"),
-        ("tokens (unknown)", "not found in local logs", "unknown"),
+        (
+            "tokens (hook)",
+            "via cursor hooks input_tokens/output_tokens when present",
+            "hook",
+        ),
     ]
     report.suggestion = "ai-verify cursor import --since 7d"
     return report

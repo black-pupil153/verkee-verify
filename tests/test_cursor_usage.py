@@ -131,7 +131,7 @@ def test_merge_turn_tracking_default_not_resolved():
     assert merged.generated_units == 875
 
 
-def test_aggregate_auto_opaque_bucket(cursor_env):
+def test_aggregate_pending_infer_bucket(cursor_env):
     paths, db = cursor_env
     importer = CursorUsageImporter(db=db, paths=paths)
     importer.import_all(since=datetime.now() - timedelta(days=30), full=True)
@@ -139,7 +139,7 @@ def test_aggregate_auto_opaque_bucket(cursor_env):
     # Inject an auto event with default tracking
     db.save_cursor_model_event(
         {
-            "id": "ev-auto-opaque",
+            "id": "ev-pending-infer",
             "task_id": "task-auto",
             "request_id": "req-opaque",
             "selected_model": "default",
@@ -165,10 +165,11 @@ def test_aggregate_auto_opaque_bucket(cursor_env):
 
     report = aggregate_task(db, "task-auto")
     assert report is not None
-    assert "auto-opaque" in report.output_shares
-    assert report.output_shares["auto-opaque"]["count"] == 100
+    assert "pending-infer" in report.output_shares
+    assert report.output_shares["pending-infer"]["count"] == 100
     assert report.resolved_requests == 0
     assert report.resolution_rate == 0.0
+    assert report.pending_infer_count >= 1
 
 
 def test_import_and_aggregate(cursor_env):
@@ -294,7 +295,11 @@ def test_hook_fills_default_tracking_model(tmp_path):
                 "payload": {
                     "conversation_id": "task-1",
                     "generation_id": "req-1",
+                    "model": "default",
                     "model_id": "claude-fable-5",
+                    "input_tokens": 120,
+                    "output_tokens": 40,
+                    "duration_ms": 1500,
                 },
             }
         )
@@ -312,6 +317,15 @@ def test_hook_fills_default_tracking_model(tmp_path):
     assert event["resolved_model"] == "claude-fable-5"
     assert event["event_source"] == "hook"
     assert event["generated_units"] == 1
+    assert event["input_tokens"] == 120
+    assert event["output_tokens"] == 40
+    assert event.get("latency_ms") == 1500
+
+    report = aggregate_task(db, "task-1")
+    assert report is not None
+    assert "claude-fable-5" in report.request_shares
+    assert "pending-infer" not in report.request_shares
+    assert report.coverage == 1.0
 
 
 def test_conversation_summary_fallback(tmp_path):
@@ -410,3 +424,70 @@ def test_request_trace_join_and_multitask_mode(tmp_path):
     assert len(events) == 1
     assert events[0]["request_id"] == "req-trace"
     assert task["mode"] == "multitask"
+
+
+def test_malformed_subagent_hook_sanitized_and_not_listed(tmp_path):
+    """Real Cursor hooks embed quotes+newline in subagent_id; must not leak as top-level tasks."""
+    fixture = (
+        Path(__file__).parent
+        / "fixtures"
+        / "cursor"
+        / "hook_subagent_malformed.ndjson"
+    )
+    hook_path = tmp_path / "cursor-hook-probe.ndjson"
+    hook_path.write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+    # Stale malformed row from a previous buggy import
+    db = Database(db_path=tmp_path / "ai_verify.db")
+    bad_id = "call_OLD\nfc_deadbeef"
+    db.save_cursor_task(
+        {
+            "task_id": bad_id,
+            "title": None,
+            "mode": "unknown",
+            "route_kind": "specific",
+            "request_count": 1,
+            "code_unit_count": 0,
+        }
+    )
+    db.save_cursor_model_event(
+        {
+            "id": "ev-bad",
+            "task_id": bad_id,
+            "parent_task_id": "task-parent-aaa",
+            "request_id": "req-bad",
+            "resolved_model": "composer-2.5-fast",
+            "route_kind": "specific",
+            "event_source": "hook",
+            "confidence": "medium",
+            "timestamp": "2026-07-10T21:00:00",
+        }
+    )
+
+    paths = CursorPaths(logs_dir=tmp_path / "logs", projects_dir=tmp_path / "projects")
+    paths.logs_dir.mkdir()
+    paths.projects_dir.mkdir()
+
+    result = CursorUsageImporter(
+        db=db, paths=paths, hook_event_paths=[hook_path]
+    ).import_all(since=datetime.now() - timedelta(days=30), full=True)
+
+    assert result.hook_events_resolved >= 2
+    assert db.get_cursor_task(bad_id) is None
+
+    clean_sub = "call_SNFbIpOhES8G3CWx9LnrzQg7"
+    sub_events = db.get_cursor_events_for_task(clean_sub)
+    assert len(sub_events) >= 1
+    assert all(e.get("parent_task_id") == "task-parent-aaa" for e in sub_events)
+    assert "\n" not in clean_sub
+
+    listed = db.list_cursor_tasks(limit=50)
+    listed_ids = {t["task_id"] for t in listed}
+    assert "task-parent-aaa" in listed_ids
+    assert clean_sub not in listed_ids
+    assert all("\n" not in tid for tid in listed_ids)
+
+    parent = db.get_cursor_task("task-parent-aaa")
+    assert parent is not None
+    assert parent["subagent_count"] >= 1
+    assert db.get_cursor_subagents("task-parent-aaa")

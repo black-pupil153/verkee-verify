@@ -41,6 +41,7 @@ MODEL_STYLES: Dict[str, str] = {
     "unknown": "dim",
     "default": "dim",
     "auto-opaque": "yellow",
+    "pending-infer": "yellow",
 }
 
 
@@ -87,7 +88,7 @@ def _share_rows(
     rows: list[Text] = []
     for model, info in shares.items():
         line = Text()
-        label = model if model not in ("unknown", "auto-opaque") else model
+        label = model if model not in ("unknown", "auto-opaque", "pending-infer") else model
         line.append(f"  {label:<20} ")
         line.append_text(_bar_text(info["pct"], model))
         line.append(
@@ -127,9 +128,11 @@ def _task_focus_panel(report: TaskUsageReport, db: Optional[Database] = None) ->
             style="dim",
         )
 
-    # 盲测推断提示：auto-opaque 产出 >50% 且有存储推断时添加
-    opaque_pct = report.output_shares.get("auto-opaque", {}).get("pct", 0)
-    if opaque_pct > 50 and db is not None:
+    # 盲测推断提示：pending-infer 产出 >50% 且有存储推断时添加
+    opaque_pct = report.output_shares.get("pending-infer", {}).get("pct", 0) or report.output_shares.get(
+        "auto-opaque", {}
+    ).get("pct", 0)
+    if (opaque_pct > 50 or report.pending_infer_count > 0) and db is not None:
         try:
             from ai_verify.monitor.blindtest_view import get_inferred_view
 

@@ -382,6 +382,9 @@ class Database:
                     route_kind=COALESCE(excluded.route_kind, cursor_model_events.route_kind),
                     confidence=excluded.confidence,
                     generated_units=MAX(excluded.generated_units, cursor_model_events.generated_units),
+                    input_tokens=COALESCE(excluded.input_tokens, cursor_model_events.input_tokens),
+                    output_tokens=COALESCE(excluded.output_tokens, cursor_model_events.output_tokens),
+                    latency_ms=COALESCE(excluded.latency_ms, cursor_model_events.latency_ms),
                     ttft_ms=COALESCE(excluded.ttft_ms, cursor_model_events.ttft_ms),
                     status=COALESCE(excluded.status, cursor_model_events.status),
                     error_text=COALESCE(excluded.error_text, cursor_model_events.error_text)
@@ -447,6 +450,40 @@ class Database:
             ).fetchall()
             return dict(rows[0]) if rows else None
 
+    def delete_cursor_tasks(self, task_ids: List[str]) -> int:
+        """Remove top-level task rows (e.g. subagent IDs incorrectly upserted)."""
+        if not task_ids:
+            return 0
+        with sqlite3.connect(self.db_path) as conn:
+            placeholders = ",".join("?" for _ in task_ids)
+            cur = conn.execute(
+                f"DELETE FROM cursor_tasks WHERE task_id IN ({placeholders})",
+                list(task_ids),
+            )
+            conn.commit()
+            return int(cur.rowcount or 0)
+
+    def purge_malformed_cursor_ids(self) -> int:
+        """Remove events/tasks whose IDs contain newlines (bad hook payloads)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cur_e = conn.execute(
+                """
+                DELETE FROM cursor_model_events
+                WHERE instr(task_id, char(10)) > 0
+                   OR instr(task_id, char(13)) > 0
+                   OR instr(IFNULL(parent_task_id, ''), char(10)) > 0
+                """
+            )
+            cur_t = conn.execute(
+                """
+                DELETE FROM cursor_tasks
+                WHERE instr(task_id, char(10)) > 0
+                   OR instr(task_id, char(13)) > 0
+                """
+            )
+            conn.commit()
+            return int((cur_e.rowcount or 0) + (cur_t.rowcount or 0))
+
     def list_cursor_tasks(
         self,
         since: Optional[str] = None,
@@ -455,7 +492,14 @@ class Database:
     ) -> List[Dict[str, Any]]:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            query = "SELECT * FROM cursor_tasks WHERE 1=1"
+            # Exclude subagent / child task IDs that only exist under a parent.
+            query = """
+                SELECT * FROM cursor_tasks
+                WHERE task_id NOT IN (
+                    SELECT DISTINCT task_id FROM cursor_model_events
+                    WHERE parent_task_id IS NOT NULL AND parent_task_id != ''
+                )
+            """
             params: List[Any] = []
             if since:
                 query += " AND COALESCE(started_at, '') >= ?"

@@ -339,6 +339,7 @@ def strip_test_labels(
                     label_source=None,
                     ttft_ms=s.ttft_ms,
                     features=dict(s.features),
+                    duration_ms=s.duration_ms,
                 )
             )
         else:

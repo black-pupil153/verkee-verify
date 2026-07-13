@@ -77,11 +77,11 @@ ai-verify/
 | 文件 | 作用 |
 | --- | --- |
 | `ai_verify/blindtest/__init__.py` | 盲测模块导出入口。 |
-| `ai_verify/blindtest/features.py` | 文风 / 行为 / 时延 / 轻量代码风格特征（哈希桶，不落正文）。 |
-| `ai_verify/blindtest/corpus.py` | 从 transcripts、hooks、logs、tracking DB 构建带标签语料（hook `model_id` 优先）。 |
+| `ai_verify/blindtest/features.py` | 文风 / 行为 / 时延（ttft+duration）/ 代码风格；通道过滤（消融）。 |
+| `ai_verify/blindtest/corpus.py` | 从 transcripts、hooks、logs、tracking DB 构建带标签语料（hook `model_id` 优先；采集 duration_ms）。 |
 | `ai_verify/blindtest/classifier.py` | 训练和运行底层模型风格分类器，支持 sklearn 与纯 Python 回退；可选 split（T 仅 val）。 |
 | `ai_verify/blindtest/splits.py` | 按 conversation_id 的 train/val/test registry 与密封标签。 |
-| `ai_verify/blindtest/eval.py` | 盲评指标（Acc@forced / Acc@τ / F1 / ECE / Brier）与 runs 落盘。 |
+| `ai_verify/blindtest/eval.py` | 盲评指标、Auto 弱验证、通道消融预设与 runs 落盘。 |
 
 ### 代理、存储和供应商
 

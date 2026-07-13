@@ -36,33 +36,61 @@ claude-fable-5 | grok-4.5 | gpt-5.5 | composer-2.5-fast | …
 
 ---
 
-## 3. Ground Truth 采集（手选）
+## 3. Ground Truth 采集（手选模型会话 · 可批量）
 
-### 3.1 会话设计
+> **「手选」指会话创建时在 Cursor 里关掉 Auto、固定选中模型 M**，不是逐 turn 人工打标签。  
+> 标签对齐、建语料、split/train/eval **全部可批量自动化**。  
+> **禁止**把 Auto 会话的推断结果当训练 GT（循环证实）。
 
-对每个目标模型 M，创建 **手动选中 M**（关闭 Auto）的 Agent 会话，覆盖任务类型：
+### 3.1 为什么不能从 Auto 批量“挖”GT？
 
-| 类型 | 示例 | 最少 turns |
-|------|------|----------:|
-| 解释/问答 | 解释一段代码 | 5 |
-| 单文件编辑 | 改函数 | 5 |
-| 多文件重构 | 跨 2+ 文件 | 5 |
-| 计划模式 | Plan 产出 | 3 |
-| 工具密集 | 多次 shell/读文件 | 5 |
+| 来源 | 能否当 GT | 原因 |
+|------|-----------|------|
+| 手选模型会话（picker=M） | ✅ | hook/log 里的非 `default` model_id 是事实真名 |
+| 纯 Auto（大量 `default`） | ❌ 训练 | 真名未知；用推断自标会循环证实 |
+| Auto 中偶然非 default 的 turn | ⚠️ 仅弱验证 | 可算 `agree_with_fact`，**不进训练集** |
 
-记录：`conversation_id`、选定模型 M、开始/结束时间。
+### 3.2 批量会话设计（扩量清单）
 
-### 3.2 标签对齐（已有 corpus 逻辑）
+对每个目标模型 M，开 **N 个**「手动选中 M」的 Agent 会话（可并行开多个 chat），覆盖任务类型：
+
+| 类型 | 示例 | 每模型最少 turns | 建议会话数 |
+|------|------|----------:|----------:|
+| 解释/问答 | 解释一段代码 | 5 | ≥2 |
+| 单文件编辑 | 改函数 | 5 | ≥2 |
+| 多文件重构 | 跨 2+ 文件 | 5 | ≥1 |
+| 计划模式 | Plan 产出 | 3 | ≥1 |
+| 工具密集 | 多次 shell/读文件 | 5 | ≥1 |
+
+记录：`conversation_id`、选定模型 M、开始/结束时间（可选；`import` 会扫到）。
+
+**批量流水线（会话跑完后一条龙）：**
+
+```bash
+ai-verify cursor import --since 30d --full
+ai-verify blindtest build-corpus --since 30d   # 自动从 hook/log 对齐标签
+ai-verify blindtest split --name default --seed 42
+ai-verify blindtest train --split default
+ai-verify blindtest eval --split default --forced
+ai-verify blindtest eval --split default --tau 0.7 --sweep
+ai-verify blindtest ablate --split default      # 通道消融
+ai-verify blindtest eval-auto --limit 30        # Auto 弱验证
+```
+
+目标：每类至少 **2+ 会话** 进 split，使 test 能见到各类（当前瓶颈是 `claude-fable-5` 仅 1 会话）。
+
+### 3.3 标签对齐（已有 corpus 逻辑）
 
 沿用 [`blindtest/corpus.py`](../../ai_verify/blindtest/corpus.py) 优先级：
 
-1. structured log `modelName != default` 按时间对齐
-2. `ai_code_hashes.model != default` join `requestId`
-3. 会话级统一标签（整会话单一模型时）
+1. hook `model_id` 按 `generation_id` join（最高优先）
+2. structured log `modelName != default` 按时间对齐
+3. `ai_code_hashes.model != default` join `requestId`
+4. 会话级统一标签（整会话单一模型时）
 
-**新增（实现阶段）**：hook `model_id` 按 `generation_id` join，优先于 2。
+时序特征：`ttft_ms`（structured log）+ `duration_ms`（hook，含 Auto）+ 输出长度。
 
-### 3.3 数据划分
+### 3.4 数据划分
 
 - 按 **conversation_id** 划分 train/val/test（防 turn 泄漏）
 - 建议 60/20/20；leave-one-conversation-out 仅作无 split 时的诊断（**不是**隐藏 test 盲评）
@@ -76,12 +104,15 @@ claude-fable-5 | grok-4.5 | gpt-5.5 | composer-2.5-fast | …
 ai-verify blindtest build-corpus --since 30d
 ai-verify blindtest split --name default --seed 42 --ratios 0.6,0.2,0.2
 ai-verify blindtest train --split default
+ai-verify blindtest train --split default --ablate latency   # 消融示例
 ai-verify blindtest eval --split default --forced          # Acc@forced（100% coverage）
 ai-verify blindtest eval --split default --tau 0.7 --sweep # Acc@τ + τ sweep
+ai-verify blindtest ablate --split default
+ai-verify blindtest eval-auto --limit 30
 ```
 
-TrainReport / EvalReport 落盘：`~/.ai-verify/blindtest/runs/<ts>/`
-（含 Acc@forced、Acc@τ、macro-F1、混淆矩阵、ECE、Brier；不落 prompt/response 正文）。
+TrainReport / EvalReport / AutoEvalReport 落盘：`~/.ai-verify/blindtest/runs/<ts>/`
+（含 Acc@forced、Acc@τ、macro-F1、混淆矩阵、ECE、Brier、agree_with_fact、opaque_residual；不落 prompt/response 正文）。
 
 双模式：
 
@@ -125,13 +156,14 @@ opaque_residual = (# turns still shown as auto-opaque) / total  → 目标 0
 
 基线：现有 `BlindModelClassifier`（LogReg + 温度 + 阈值）。
 
-对比实验：
+对比实验（`blindtest ablate` / `--channels`）：
 
 1. text-only  
 2. code-only  
 3. text+code 拼接  
-4. +timing  
-5. （可选）小编码器微调（`[ml]` extra）
+4. text+code+behavior  
+5. +latency（含 ttft_ms / duration_ms / 输出长度）
+6. （可选）小编码器微调（`[ml]` extra）
 
 校准：
 
@@ -158,16 +190,17 @@ opaque_residual = (# turns still shown as auto-opaque) / total  → 目标 0
 ## 8. 操作检查清单
 
 ```text
-[ ] 每模型手选会话按类型跑完
+[ ] 每模型批量开手选会话（picker=M，关 Auto；类型见表）
 [ ] ai-verify cursor import --since …
 [ ] ai-verify blindtest build-corpus（或等价）
-[ ] 确认标签来源统计：hook / tracking / log 占比
-[ ] ai-verify blindtest split --seed …（确认 test 会话数 > 0）
+[ ] 确认标签来源统计：hook / tracking / log 占比；每类 ≥2 会话
+[ ] ai-verify blindtest split --seed …（确认 test 会话数 > 0 且尽量覆盖各类）
 [ ] ai-verify blindtest train --split … → 记录 TrainReport（runs/<ts>/）
 [ ] 确认训练未加载 *.sealed.json；T 仅在 val 拟合
 [ ] ai-verify blindtest eval --forced / --tau / --sweep
 [ ] test 表：Acc@forced / Acc@τ / F1 / ECE / Brier / 混淆矩阵
-[ ] Auto 集：coverage、opaque_residual、agree_with_fact（Phase 2）
+[ ] ai-verify blindtest ablate --split …（通道消融）
+[ ] ai-verify blindtest eval-auto（coverage / opaque_residual / agree_with_fact）
 [ ] 更新 FEASIBILITY 中的「实测」列（实现阶段）
 ```
 

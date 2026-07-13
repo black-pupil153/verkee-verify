@@ -7,8 +7,9 @@
 3. ai_code_hashes.model（非 default，按对齐得到的 requestId join）
 4. 会话级统一标签：该会话全部请求均为同一非 default 模型时整体打标
 
-Ground-truth 训练：只用**手选会话**（明确手动选模或 hook/tracking 已给出非 default
-标签的会话）构建语料；纯 Auto / default 不可见请求不得当作 GT 标签。
+Ground-truth 训练：只用**手选模型会话**（Cursor picker 固定为 M、关 Auto；
+hook/tracking 给出非 default 真名）。标签对齐与建语料可批量自动化。
+纯 Auto / default 不可见请求不得当作 GT 标签。
 
 隐私：语料只保存特征向量与哈希，不落原始文本。
 """
@@ -60,6 +61,7 @@ class CorpusSample:
     label_source: Optional[str]
     ttft_ms: Optional[float]
     features: Dict[str, float]
+    duration_ms: Optional[float] = None
 
 
 @dataclass
@@ -188,6 +190,7 @@ class RequestEvent:
     model: Optional[str]  # None 表示不可见（default）
     timestamp: Optional[datetime]
     ttft_ms: Optional[float] = None
+    duration_ms: Optional[float] = None
     source: str = "structured_log"
 
 
@@ -198,6 +201,7 @@ class LabelIndex:
         self.by_conversation: Dict[str, List[RequestEvent]] = {}
         self.hash_models: Dict[str, str] = {}  # request_id -> model (非 default)
         self.hook_models: Dict[str, str] = {}  # request_id -> hook model_id (非 default)
+        self.durations: Dict[str, float] = {}  # request_id -> duration_ms（含 Auto）
 
     def add_event(self, ev: RequestEvent) -> None:
         self.by_conversation.setdefault(ev.conversation_id, []).append(ev)
@@ -288,10 +292,13 @@ def build_label_index(
     for hook_path in paths:
         try:
             for hev in iter_hook_events(hook_path):
+                rid = hev.generation_id
+                # duration 对 Auto/手选均有用，与是否可见真名无关
+                if rid and hev.duration_ms is not None and hev.duration_ms >= 0:
+                    index.durations[rid] = float(hev.duration_ms)
                 mid = hev.model_id or hev.subagent_model
                 if not mid or mid == "default":
                     continue
-                rid = hev.generation_id
                 if rid:
                     index.hook_models[rid] = mid
                 if hev.conversation_id:
@@ -301,6 +308,11 @@ def build_label_index(
                             request_id=rid,
                             model=mid,
                             timestamp=_parse_hook_timestamp(hev.received_at),
+                            duration_ms=(
+                                float(hev.duration_ms)
+                                if hev.duration_ms is not None
+                                else None
+                            ),
                             source="hook",
                         )
                     )
@@ -416,7 +428,7 @@ def build_label_index(
 
 
 def label_turns(turns: List[TurnRecord], index: LabelIndex) -> None:
-    """就地为 turns 填充 request_id / ttft_ms / label / label_source。"""
+    """就地为 turns 填充 request_id / ttft_ms / duration_ms / label / label_source。"""
     if not turns:
         return
     cid = turns[0].conversation_id
@@ -427,10 +439,14 @@ def label_turns(turns: List[TurnRecord], index: LabelIndex) -> None:
         if ev is not None:
             turn.request_id = ev.request_id
             turn.ttft_ms = ev.ttft_ms
+            if ev.duration_ms is not None:
+                turn.duration_ms = ev.duration_ms
             model, src = index.resolve_model(ev.request_id, ev.model)
             if model:
                 turn.label = model
                 turn.label_source = src or ev.source
+        if turn.request_id and turn.request_id in index.durations:
+            turn.duration_ms = index.durations[turn.request_id]
         if turn.label is None and uniform:
             turn.label = uniform
             turn.label_source = "conversation_uniform"
@@ -489,6 +505,7 @@ def build_corpus(
                     label_source=turn.label_source,
                     ttft_ms=turn.ttft_ms,
                     features=extract_features(turn),
+                    duration_ms=turn.duration_ms,
                 )
             )
 
@@ -554,7 +571,18 @@ def load_corpus(blindtest_dir: Optional[Path] = None) -> Corpus:
     payload = json.loads(path.read_text(encoding="utf-8"))
     corpus = Corpus(built_at=payload.get("built_at"), stats=payload.get("stats", {}))
     for item in payload.get("samples", []):
-        corpus.samples.append(CorpusSample(**item))
+        corpus.samples.append(
+            CorpusSample(
+                conversation_id=item["conversation_id"],
+                turn_index=int(item["turn_index"]),
+                request_id=item.get("request_id"),
+                label=item.get("label"),
+                label_source=item.get("label_source"),
+                ttft_ms=item.get("ttft_ms"),
+                features=dict(item.get("features") or {}),
+                duration_ms=item.get("duration_ms"),
+            )
+        )
     return corpus
 
 

@@ -77,6 +77,33 @@ def test_latency_features():
     assert "lat_ttft_present" not in without
 
 
+def test_duration_and_out_chars_latency():
+    turn = _make_turn(assistant_texts=["hello world"], duration_ms=3500.0)
+    feats = extract_features(turn)
+    assert feats["lat_duration_present"] == 1.0
+    assert feats["lat_duration_log"] > 8
+    assert feats["lat_out_chars_log"] > 0
+
+
+def test_feature_channel_filter():
+    from ai_verify.blindtest.features import (
+        filter_features_by_channels,
+        parse_channels,
+    )
+
+    turn = _make_turn(
+        assistant_texts=["```\ndef foo():\n  return 1\n```\n- item"],
+        tool_batches=[["Read"]],
+        ttft_ms=1000.0,
+        duration_ms=2000.0,
+    )
+    feats = extract_features(turn)
+    text_only = filter_features_by_channels(feats, ["text"])
+    assert all(k.startswith(("txt_", "ng3_", "open_")) for k in text_only)
+    assert not any(k.startswith("lat_") for k in text_only)
+    assert parse_channels(ablate=["latency"]) == ("text", "code", "behavior")
+
+
 def test_empty_turn():
     feats = extract_features(_make_turn())
     assert feats["txt_chars_log"] == 0.0

@@ -5,7 +5,7 @@
 
 ## 一句话状态
 
-VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视主路径 + 手选 train/coverage + H 融合默认 + 标题 summary 回退 + **Phase 1 盲评基建与本机隐藏 test 跑通**均已完成。瓶颈仍是数据与评估规模（24 样本 / 6 会话；test 仅 1 会话×3 turn；`claude-fable-5` 未进 test），不是模型容量。**91.7% 是 LOCO-CV 诊断，不是盲评**；隐藏 test Acc@forced **66.7%**（n=3）。下一优先 = Phase 2（手选 GT 扩量等，仅用户点名）或先 commit Phase 1 代码。微调后置。
+VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1 盲评基建（已 commit）+ 本机隐藏 test 跑通均已完成。**Phase 2 落地中**：duration_ms 特征、通道消融（`ablate`）、Auto 弱验证（`eval-auto`）；GT 扩量 = **批量开「手选模型」会话**（picker 固定，标签自动对齐），不是逐 turn 手标。瓶颈仍是数据（test n=3）；91.7%=LOCO-CV≠盲评；Acc@forced=66.7%。微调后置。
 
 ## 仓库与运行状态
 
@@ -66,11 +66,12 @@ ai-verify blindtest eval --split default --tau 0.7 --sweep
 ```
 
 - `ai_verify/blindtest/splits.py` — 按 conversation_id 的 train/val/test registry + 密封标签
-- `ai_verify/blindtest/eval.py` — Acc@forced / Acc@τ / τ sweep / macro-F1 / 混淆矩阵 / ECE / Brier；runs 落盘
+- `ai_verify/blindtest/eval.py` — Acc@forced / Acc@τ / τ sweep / macro-F1 / ECE / Brier；Auto 弱验证；通道消融；runs 落盘
 - `classifier.train(..., split=)` — T 只在 val 拟合；test 标签不可见
 - 双模式：selective（阈值弃权）vs forced top-1
+- Phase 2：`duration_ms` 时序特征；`train/eval --channels/--ablate`；`blindtest ablate`；`blindtest eval-auto`
 - 推断仍不得写入 `resolved_model`；报告不落 prompt/response 正文
-
+- **GT 扩量**：关 Auto、固定 picker=M 批量开会话 → `import` + `build-corpus` 自动打标（见实验协议 §3）
 ## 本机验收摘要（2026-07-11）
 
 | 项 | 结果 |
@@ -108,7 +109,21 @@ Runs（仅本机，不入 git）：
 - EvalReport forced：`~/.ai-verify/blindtest/runs/20260713-192621/`
 - EvalReport selective+sweep：`~/.ai-verify/blindtest/runs/20260713-192621-1/`
 
-结论：管道已通；数字不可外推——test n=3、单会话、闭集缺一类。扩量（Phase 2）优先于换模型。
+结论：管道已通；数字不可外推——test n=3、单会话、闭集缺一类。扩量（批量手选模型会话）优先于换模型。
+
+### Phase 2 本机结果（2026-07-13）
+
+消融 `ablate --split default`（Acc@forced，n=3；runs `…/20260713-201038/`）：
+
+| preset | Acc@forced | Val Acc |
+|--------|------------|---------|
+| text | 33.3% | 55.6% |
+| code | 33.3% | 11.1% |
+| text+code | 66.7% | 33.3% |
+| text+code+behavior | 66.7% | 33.3% |
+| +latency | 66.7% | 33.3% |
+
+Auto 弱验证 `eval-auto --limit 20 --no-infer`（runs `…/20260713-201046/`）：coverage **75%**；opaque_residual **25%**；agree_with_fact **66.7%**（n=3 事实子集）。**非盲评 GT**。
 
 基线测试：
 
@@ -130,11 +145,10 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 6. ~~提交本轮工作区改动~~（含 `docs/research/` 与 Auto 透视代码）
 7. ~~手选会话 `blindtest build-corpus` → `train` → `infer` + 本机 Auto coverage 验收~~（已完成；语料/模型仅存本机）
 8. ~~H 融合默认开启 + 无 composerHeader 标题 summary 回退~~
-9. ~~Phase 1 盲评基建 + 本机隐藏 test 跑通~~（代码未 commit；指标见上节）
-10. **可选立刻**：commit Phase 1 工作区改动（勿擅自 push）
-11. **Phase 2**（勿提前开工除非用户点名）：手选 GT 扩量（使每类进 test）、duration_ms/消融、Auto 集 `agree_with_fact` / `opaque_residual`
-12. **Phase 3**（隐藏 test 平台期后且用户要求）：sentence-transformers / 微调
-13. **可选**：周期探针先验（D/F）、ITT（E）、proxy merge — 仅用户点名时做
+9. ~~Phase 1 盲评基建 + 本机隐藏 test 跑通~~（已 commit：`6c25caa`）
+10. **Phase 2（进行中）**：duration/消融/`eval-auto` 代码；**GT 扩量需你批量开手选模型会话**（每类 ≥2 会话进 test）后再 `import`→`build-corpus`→`split`→`eval`
+11. **Phase 3**（隐藏 test 平台期后且用户要求）：sentence-transformers / 微调
+12. **可选**：周期探针先验（D/F）、ITT（E）、proxy merge — 仅用户点名时做
 
 ## 关键边界
 
@@ -148,9 +162,10 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 
 ```text
 先读 docs/PROJECT_STATUS.md、docs/research/README.md、docs/research/EXPERIMENT_PROTOCOL.md。
-不要重做：Cursor P0/P1、长检索、G/H/C+B、手选 train/coverage、H 默认融合、标题 summary 回退、Phase 1 split/eval、本机隐藏 test 跑通、D/F/ITT（除非用户点名）。
-产品判断：最根本能力是模型盲测；瓶颈是数据（test n=3），不是模型容量。91.7%=LOCO-CV≠盲评；盲评 Acc@forced=66.7%。
-下一优先：用户要求则 commit Phase 1；否则仅当用户点名开 Phase 2 扩量。
+不要重做：Cursor P0/P1、长检索、G/H/C+B、手选 train/coverage、H 默认融合、标题 summary 回退、Phase 1、本机隐藏 test、duration/消融/eval-auto 基建、D/F/ITT（除非用户点名）。
+产品判断：最根本能力是模型盲测；瓶颈是数据。91.7%=LOCO-CV≠盲评；Acc@forced=66.7%。
+「手选 GT」= Cursor picker 固定模型（可批量开会话）；标签用 import+build-corpus 自动对齐；禁止 Auto 自标。
+下一优先：用户批量开手选模型会话（每类≥2）后 rebuild corpus→split→eval；或 commit/push Phase 2。
 回归：venv/bin/python -m pytest -q tests -k "not ml_optional"。
 保持 factual vs inferred 分轨与隐私边界。
 ```

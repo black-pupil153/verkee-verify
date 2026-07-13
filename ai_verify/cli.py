@@ -990,7 +990,8 @@ def blindtest_build_corpus(since: Optional[str], include_unlabeled: bool):
             )
     else:
         console.print(
-            "[yellow]无带标签样本。请先在 Cursor 手选模型跑几个任务，再重新构建语料。[/yellow]"
+            "[yellow]无带标签样本。请先在 Cursor 关掉 Auto、固定选手选模型批量跑任务，"
+            "再 import + build-corpus（标签会自动对齐，无需逐 turn 手标）。[/yellow]"
         )
 
 
@@ -1060,17 +1061,50 @@ def blindtest_split(name: str, seed: int, ratios: str):
     default=None,
     help="使用已保存的 split（train 拟合 / val 校准 T；不读 test 密封标签）",
 )
-def blindtest_train(threshold: float, split_name: Optional[str]):
+@click.option(
+    "--channels",
+    default=None,
+    help="特征通道逗号分隔：text,code,behavior,latency（默认全开）",
+)
+@click.option(
+    "--ablate",
+    default=None,
+    help="消融通道逗号分隔（从全通道中去掉），如 latency",
+)
+def blindtest_train(
+    threshold: float,
+    split_name: Optional[str],
+    channels: Optional[str],
+    ablate: Optional[str],
+):
     """训练盲测分类器并输出 TrainReport"""
     from ai_verify.blindtest.classifier import BlindModelClassifier
     from ai_verify.blindtest.corpus import load_corpus
-    from ai_verify.blindtest.eval import new_run_dir, save_run_artifacts
+    from ai_verify.blindtest.eval import (
+        apply_channels_to_corpus,
+        new_run_dir,
+        save_run_artifacts,
+    )
+    from ai_verify.blindtest.features import parse_channels
+
+    try:
+        channel_list = parse_channels(
+            channels.split(",") if channels else None,
+            ablate=ablate.split(",") if ablate else None,
+        )
+    except ValueError as exc:
+        console.print(f"[red]✗ {exc}[/red]")
+        raise SystemExit(1)
 
     try:
         corpus = load_corpus()
     except FileNotFoundError:
         console.print("[red]✗ 未找到语料，请先运行 ai-verify blindtest build-corpus[/red]")
         raise SystemExit(1)
+
+    if channel_list != ("text", "code", "behavior", "latency"):
+        corpus = apply_channels_to_corpus(corpus, channel_list)
+        console.print(f"[cyan]特征通道: {','.join(channel_list)}[/cyan]")
 
     split = None
     if split_name is not None:
@@ -1107,6 +1141,7 @@ def blindtest_train(threshold: float, split_name: Optional[str]):
         meta={
             "command": "train",
             "split": split_name,
+            "channels": list(channel_list),
             "model_path": str(_blindtest_model_path()),
             "threshold": threshold,
         },
@@ -1120,6 +1155,7 @@ def blindtest_train(threshold: float, split_name: Optional[str]):
     table.add_row("backend", report.backend)
     table.add_row("样本数", str(report.n_samples))
     table.add_row("会话数", str(report.n_conversations))
+    table.add_row("channels", ",".join(channel_list))
     if report.split_name:
         table.add_row("split", report.split_name)
         table.add_row("n_train / n_val", f"{report.n_train} / {report.n_val}")
@@ -1159,21 +1195,49 @@ def blindtest_train(threshold: float, split_name: Optional[str]):
 @click.option("--forced", is_flag=True, help="强制 top-1（100% coverage 诚实准确率）")
 @click.option("--tau", default=None, type=float, help="selective 模式阈值（默认用模型阈值）")
 @click.option("--sweep", is_flag=True, help="扫描 τ∈{0.5,0.6,0.7,0.8,0.9}")
-def blindtest_eval(split_name: str, forced: bool, tau: Optional[float], sweep: bool):
+@click.option(
+    "--channels",
+    default=None,
+    help="评估时按通道过滤特征（须与 train --channels 一致）",
+)
+@click.option(
+    "--ablate",
+    default=None,
+    help="评估时消融通道（须与 train --ablate 一致）",
+)
+def blindtest_eval(
+    split_name: str,
+    forced: bool,
+    tau: Optional[float],
+    sweep: bool,
+    channels: Optional[str],
+    ablate: Optional[str],
+):
     """在密封 test 集上评估（Acc@forced / Acc@τ / F1 / ECE / Brier）"""
     from ai_verify.blindtest.classifier import BlindModelClassifier
     from ai_verify.blindtest.corpus import load_corpus
     from ai_verify.blindtest.eval import (
+        apply_channels_to_samples,
         evaluate_classifier,
         new_run_dir,
         save_run_artifacts,
     )
+    from ai_verify.blindtest.features import parse_channels
     from ai_verify.blindtest.splits import (
         filter_samples,
         load_sealed_labels,
         load_split,
         strip_test_labels,
     )
+
+    try:
+        channel_list = parse_channels(
+            channels.split(",") if channels else None,
+            ablate=ablate.split(",") if ablate else None,
+        )
+    except ValueError as exc:
+        console.print(f"[red]✗ {exc}[/red]")
+        raise SystemExit(1)
 
     model_path = _blindtest_model_path()
     if not model_path.is_file():
@@ -1199,6 +1263,8 @@ def blindtest_eval(split_name: str, forced: bool, tau: Optional[float], sweep: b
         for s in test_samples
         if (s.conversation_id, s.turn_index) in sealed
     ]
+    if channel_list != ("text", "code", "behavior", "latency"):
+        test_samples = apply_channels_to_samples(test_samples, channel_list)
     if not test_samples:
         console.print("[red]✗ test 集为空或无密封标签[/red]")
         raise SystemExit(1)
@@ -1225,6 +1291,7 @@ def blindtest_eval(split_name: str, forced: bool, tau: Optional[float], sweep: b
             "forced": forced,
             "tau": tau,
             "sweep": sweep,
+            "channels": list(channel_list),
             "n_test": len(test_samples),
         },
     )
@@ -1283,6 +1350,161 @@ def blindtest_eval(split_name: str, forced: bool, tau: Optional[float], sweep: b
                 f"{row['ece']:.3f}" if row["ece"] is not None else "-",
             )
         console.print(sw)
+
+
+@blindtest.command("ablate")
+@click.option(
+    "--split",
+    "split_name",
+    default="default",
+    show_default=True,
+    help="使用 split 做 train+forced eval 消融",
+)
+@click.option("--threshold", default=0.7, show_default=True, help="推断概率阈值")
+def blindtest_ablate(split_name: str, threshold: float):
+    """按协议通道组合重训并 forced 盲评（text / code / +behavior / +latency）"""
+    from ai_verify.blindtest.classifier import BlindModelClassifier
+    from ai_verify.blindtest.corpus import load_corpus
+    from ai_verify.blindtest.eval import (
+        ABLATION_PRESETS,
+        apply_channels_to_corpus,
+        apply_channels_to_samples,
+        evaluate_classifier,
+        new_run_dir,
+        save_run_artifacts,
+    )
+    from ai_verify.blindtest.splits import (
+        filter_samples,
+        load_sealed_labels,
+        load_split,
+        strip_test_labels,
+    )
+
+    try:
+        corpus = load_corpus()
+        split = load_split(split_name)
+        sealed = load_sealed_labels(split_name)
+    except FileNotFoundError as exc:
+        console.print(f"[red]✗ {exc}[/red]")
+        raise SystemExit(1)
+
+    rows = []
+    eval_reports = []
+    for name, chans in ABLATION_PRESETS:
+        ch_corpus = apply_channels_to_corpus(corpus, chans)
+        train_corpus = strip_test_labels(ch_corpus, split)
+        clf = BlindModelClassifier(threshold=threshold)
+        try:
+            train_report = clf.train(
+                train_corpus, split=split, split_name=split_name
+            )
+        except (ValueError, RuntimeError) as exc:
+            rows.append((name, ",".join(chans), f"fail:{exc}", "-"))
+            continue
+        open_corpus = strip_test_labels(ch_corpus, split)
+        test_samples = [
+            s
+            for s in filter_samples(
+                open_corpus.samples, split, "test", labeled_only=False
+            )
+            if (s.conversation_id, s.turn_index) in sealed
+        ]
+        test_samples = apply_channels_to_samples(test_samples, chans)
+        report = evaluate_classifier(
+            clf,
+            test_samples,
+            forced=True,
+            sealed=sealed,
+            split_name=split_name,
+        )
+        report.notes.append(f"ablation={name}")
+        eval_reports.append(report)
+        acc = f"{report.accuracy:.1%}" if report.accuracy is not None else "N/A"
+        va = (
+            f"{train_report.val_accuracy:.1%}"
+            if train_report.val_accuracy is not None
+            else "N/A"
+        )
+        rows.append((name, ",".join(chans), acc, va))
+
+    run_dir = new_run_dir()
+    save_run_artifacts(
+        run_dir,
+        eval_reports=eval_reports or None,
+        meta={"command": "ablate", "split": split_name, "rows": rows},
+    )
+    table = Table(title=f"Ablation (split={split_name}, Acc@forced)")
+    table.add_column("preset", style="cyan")
+    table.add_column("channels")
+    table.add_column("Acc@forced", justify="right")
+    table.add_column("Val Acc", justify="right")
+    for row in rows:
+        table.add_row(*row)
+    console.print(table)
+    console.print(f"[green]✓[/green] 消融报告: {run_dir}")
+
+
+@blindtest.command("eval-auto")
+@click.option("--task", "task_id", default=None, help="单个任务 ID（前缀）")
+@click.option("--limit", default=30, show_default=True, help="Auto/Mixed 任务上限")
+@click.option(
+    "--no-infer",
+    is_flag=True,
+    help="不触发自动推断（只读已有 blindtest_inferences）",
+)
+def blindtest_eval_auto(task_id: Optional[str], limit: int, no_infer: bool):
+    """Auto 集弱验证：coverage / agree_with_fact / opaque_residual（不写 resolved_model）"""
+    from ai_verify.blindtest.eval import (
+        evaluate_auto_from_db,
+        new_run_dir,
+        save_run_artifacts,
+    )
+    from ai_verify.storage.database import Database
+
+    db = Database()
+    report = evaluate_auto_from_db(
+        db,
+        task_ids=[task_id] if task_id else None,
+        auto_only=task_id is None,
+        limit=limit,
+        auto_infer=not no_infer,
+    )
+    run_dir = new_run_dir()
+    save_run_artifacts(
+        run_dir,
+        auto_report=report,
+        meta={
+            "command": "eval-auto",
+            "task_id": task_id,
+            "limit": limit,
+            "auto_infer": not no_infer,
+        },
+    )
+
+    table = Table(title="AutoEvalReport（弱验证，非盲评 GT）")
+    table.add_column("指标", style="cyan")
+    table.add_column("值", style="green")
+    table.add_row("tasks / turns", f"{report.n_tasks} / {report.n_turns}")
+    table.add_row("coverage", f"{report.coverage:.1%}")
+    table.add_row("opaque_residual", f"{report.opaque_residual:.1%}")
+    agree = (
+        f"{report.agree_with_fact:.1%}"
+        if report.agree_with_fact is not None
+        else "N/A"
+    )
+    table.add_row(
+        "agree_with_fact",
+        f"{agree} (n={report.n_fact_pairs})",
+    )
+    table.add_row("factual / inferred-only / opaque",
+                  f"{report.n_factual} / {report.n_inferred_only} / {report.n_opaque}")
+    console.print(table)
+    console.print(f"[green]✓[/green] AutoEvalReport: {run_dir / 'auto_eval_report.json'}")
+    for note in report.notes:
+        console.print(f"[yellow]note: {note}[/yellow]")
+    console.print(
+        "[dim]推断不得写入 resolved_model；agree_with_fact 仅在偶然非 default 事实子集上核对。[/dim]"
+    )
 
 
 @blindtest.command("infer")

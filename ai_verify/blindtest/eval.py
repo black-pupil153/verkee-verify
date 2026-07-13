@@ -18,7 +18,7 @@ from ai_verify.blindtest.classifier import (
     TrainReport,
     report_as_dict,
 )
-from ai_verify.blindtest.corpus import DEFAULT_BLINDTEST_DIR, CorpusSample
+from ai_verify.blindtest.corpus import DEFAULT_BLINDTEST_DIR, Corpus, CorpusSample
 from ai_verify.blindtest.splits import SealedLabel
 
 RUNS_SUBDIR = "runs"
@@ -303,9 +303,10 @@ def save_run_artifacts(
     *,
     train_report: Optional[TrainReport] = None,
     eval_reports: Optional[Sequence[EvalReport]] = None,
+    auto_report: Optional[AutoEvalReport] = None,
     meta: Optional[Dict[str, Any]] = None,
 ) -> Path:
-    """将 TrainReport / EvalReport 写入 runs/<ts>/，不含正文。"""
+    """将 TrainReport / EvalReport / AutoEvalReport 写入 runs/<ts>/，不含正文。"""
     run_dir.mkdir(parents=True, exist_ok=True)
     if train_report is not None:
         (run_dir / "train_report.json").write_text(
@@ -318,6 +319,11 @@ def save_run_artifacts(
             json.dumps(payload if len(payload) > 1 else payload[0], ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+    if auto_report is not None:
+        (run_dir / "auto_eval_report.json").write_text(
+            json.dumps(asdict(auto_report), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     if meta:
         (run_dir / "meta.json").write_text(
             json.dumps(meta, ensure_ascii=False, indent=2),
@@ -328,3 +334,168 @@ def save_run_artifacts(
 
 def report_eval_as_dict(report: EvalReport) -> Dict[str, Any]:
     return asdict(report)
+
+
+@dataclass
+class AutoEvalReport:
+    """Auto 集弱验证（无完整 GT；factual 子集可核对）。"""
+
+    n_tasks: int
+    n_turns: int
+    coverage: float  # (fact ∪ inferred) / turns
+    opaque_residual: float  # 仍 pending-infer（或 auto-opaque）/ turns → 目标 0
+    agree_with_fact: Optional[float]  # Acc(inferred, factual) where factual ≠ default
+    n_fact_pairs: int  # 参与 agree_with_fact 的 turn 数
+    n_factual: int
+    n_inferred_only: int
+    n_opaque: int
+    evaluated_at: str = ""
+    notes: List[str] = field(default_factory=list)
+
+
+def evaluate_auto_reports(
+    reports: Sequence[Any],
+    *,
+    pending_bucket: str = "pending-infer",
+    opaque_bucket: str = "auto-opaque",
+) -> AutoEvalReport:
+    """从 TaskUsageReport 列表汇总 Auto 弱验证指标。
+
+    不读 prompt/response；只用 per_request 上的 resolved/selected 与 inferred。
+    """
+    opaque_set = {pending_bucket, opaque_bucket}
+    n_tasks = 0
+    n_turns = 0
+    n_covered = 0
+    n_opaque = 0
+    n_factual = 0
+    n_inferred_only = 0
+    n_agree = 0
+    n_fact_pairs = 0
+    notes: List[str] = []
+
+    for report in reports:
+        per_request = getattr(report, "per_request", None) or []
+        if not per_request:
+            continue
+        n_tasks += 1
+        for row in per_request:
+            n_turns += 1
+            resolved = row.get("resolved_model")
+            selected = row.get("selected_model")
+            fact_name = None
+            for cand in (resolved, selected):
+                if cand and cand not in ("", "default") and cand not in opaque_set:
+                    fact_name = cand
+                    break
+            inferred = row.get("inferred_model")
+            bucket = row.get("bucket")
+
+            if bucket in opaque_set:
+                n_opaque += 1
+            else:
+                n_covered += 1
+                if fact_name:
+                    n_factual += 1
+                elif inferred:
+                    n_inferred_only += 1
+
+            if fact_name and inferred:
+                n_fact_pairs += 1
+                if str(inferred).lower() == str(fact_name).lower():
+                    n_agree += 1
+
+    if n_turns == 0:
+        notes.append("no Auto turns found in reports")
+    coverage = (n_covered / n_turns) if n_turns else 0.0
+    opaque_residual = (n_opaque / n_turns) if n_turns else 0.0
+    agree = (n_agree / n_fact_pairs) if n_fact_pairs else None
+
+    return AutoEvalReport(
+        n_tasks=n_tasks,
+        n_turns=n_turns,
+        coverage=coverage,
+        opaque_residual=opaque_residual,
+        agree_with_fact=agree,
+        n_fact_pairs=n_fact_pairs,
+        n_factual=n_factual,
+        n_inferred_only=n_inferred_only,
+        n_opaque=n_opaque,
+        evaluated_at=datetime.now().isoformat(),
+        notes=notes,
+    )
+
+
+def evaluate_auto_from_db(
+    db: Any,
+    *,
+    task_ids: Optional[Sequence[str]] = None,
+    auto_only: bool = True,
+    limit: int = 50,
+    auto_infer: bool = True,
+) -> AutoEvalReport:
+    """从本机 DB 拉 Auto/Mixed 任务并汇总弱验证指标（不写 resolved_model）。"""
+    from ai_verify.monitor.cursor_usage import aggregate_task
+
+    if task_ids:
+        ids = list(task_ids)
+    else:
+        tasks = db.list_cursor_tasks(limit=max(limit * 3, 50))
+        ids = []
+        for t in tasks:
+            if auto_only and t.get("route_kind") not in ("auto", "mixed"):
+                continue
+            ids.append(t["task_id"])
+            if len(ids) >= limit:
+                break
+
+    reports = []
+    for tid in ids:
+        report = aggregate_task(db, tid, auto_infer=auto_infer)
+        if report is not None:
+            reports.append(report)
+
+    out = evaluate_auto_reports(reports)
+    if not ids:
+        out.notes.append("no matching tasks in DB")
+    return out
+
+
+ABLATION_PRESETS: List[Tuple[str, Tuple[str, ...]]] = [
+    ("text", ("text",)),
+    ("code", ("code",)),
+    ("text+code", ("text", "code")),
+    ("text+code+behavior", ("text", "code", "behavior")),
+    ("+latency", ("text", "code", "behavior", "latency")),
+]
+
+
+def apply_channels_to_samples(
+    samples: Sequence[CorpusSample], channels: Sequence[str]
+) -> List[CorpusSample]:
+    """返回特征按通道过滤后的样本副本。"""
+    from ai_verify.blindtest.features import filter_features_by_channels
+
+    out: List[CorpusSample] = []
+    for s in samples:
+        out.append(
+            CorpusSample(
+                conversation_id=s.conversation_id,
+                turn_index=s.turn_index,
+                request_id=s.request_id,
+                label=s.label,
+                label_source=s.label_source,
+                ttft_ms=s.ttft_ms,
+                features=filter_features_by_channels(s.features, channels),
+                duration_ms=s.duration_ms,
+            )
+        )
+    return out
+
+
+def apply_channels_to_corpus(corpus: Corpus, channels: Sequence[str]) -> Corpus:
+    return Corpus(
+        samples=apply_channels_to_samples(corpus.samples, channels),
+        built_at=corpus.built_at,
+        stats=dict(corpus.stats),
+    )

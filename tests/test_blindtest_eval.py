@@ -276,3 +276,52 @@ def test_ece_basic():
     perfect = expected_calibration_error([0.5, 0.5], [True, False], n_bins=1)
     assert perfect is not None
     assert abs(perfect) < 1e-9
+
+
+def test_auto_eval_agree_and_opaque():
+    from types import SimpleNamespace
+
+    from ai_verify.blindtest.eval import evaluate_auto_reports
+
+    reports = [
+        SimpleNamespace(
+            per_request=[
+                {
+                    "resolved_model": "grok-4.5",
+                    "selected_model": "default",
+                    "inferred_model": "grok-4.5",
+                    "bucket": "grok-4.5",
+                },
+                {
+                    "resolved_model": "default",
+                    "selected_model": "default",
+                    "inferred_model": "claude-fable-5",
+                    "bucket": "claude-fable-5",
+                },
+                {
+                    "resolved_model": "default",
+                    "selected_model": "default",
+                    "inferred_model": None,
+                    "bucket": "pending-infer",
+                },
+            ]
+        )
+    ]
+    report = evaluate_auto_reports(reports)
+    assert report.n_turns == 3
+    assert report.n_opaque == 1
+    assert abs(report.opaque_residual - 1 / 3) < 1e-9
+    assert abs(report.coverage - 2 / 3) < 1e-9
+    assert report.n_fact_pairs == 1
+    assert report.agree_with_fact == 1.0
+
+
+def test_apply_channels_drops_latency():
+    from ai_verify.blindtest.eval import apply_channels_to_samples
+
+    corpus = _build_corpus(n_convs_per_class=2, turns_per_conv=2)
+    filtered = apply_channels_to_samples(corpus.samples, ["text", "code"])
+    assert filtered
+    for s in filtered:
+        assert not any(k.startswith("lat_") for k in s.features)
+        assert s.features  # still has some features

@@ -15,7 +15,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence, Tuple
 
 # 哈希桶大小（特征维度权衡：语料小，桶不宜过大）
 CHAR_NGRAM_BUCKETS = 64
@@ -51,6 +51,7 @@ class TurnRecord:
     user_timestamp: Optional[datetime] = None
     request_id: Optional[str] = None
     ttft_ms: Optional[float] = None
+    duration_ms: Optional[float] = None
     label: Optional[str] = None
     label_source: Optional[str] = None
 
@@ -247,7 +248,61 @@ def _latency_features(turn: TurnRecord) -> Dict[str, float]:
     if turn.ttft_ms is not None and turn.ttft_ms >= 0:
         feats["lat_ttft_present"] = 1.0
         feats["lat_ttft_log"] = math.log1p(turn.ttft_ms)
+    if turn.duration_ms is not None and turn.duration_ms >= 0:
+        feats["lat_duration_present"] = 1.0
+        feats["lat_duration_log"] = math.log1p(turn.duration_ms)
+    # 输出长度（时序通道的一部分；不落正文）
+    out_chars = sum(len(t) for t in turn.assistant_texts)
+    if out_chars > 0:
+        feats["lat_out_chars_log"] = math.log1p(out_chars)
     return feats
+
+
+# 特征通道：消融实验用前缀约定
+FEATURE_CHANNELS: Dict[str, Tuple[str, ...]] = {
+    "text": ("txt_", "ng3_", "open_"),
+    "code": ("code_",),
+    "behavior": ("beh_",),
+    "latency": ("lat_",),
+}
+ALL_CHANNELS: Tuple[str, ...] = ("text", "code", "behavior", "latency")
+
+
+def parse_channels(
+    channels: Optional[Sequence[str]] = None,
+    *,
+    ablate: Optional[Sequence[str]] = None,
+) -> Tuple[str, ...]:
+    """解析 --channels / --ablate；默认全通道。"""
+    selected = set(ALL_CHANNELS if channels is None else channels)
+    unknown = selected - set(ALL_CHANNELS)
+    if unknown:
+        raise ValueError(f"unknown feature channels: {sorted(unknown)}")
+    if ablate:
+        drop = set(ablate)
+        unknown_a = drop - set(ALL_CHANNELS)
+        if unknown_a:
+            raise ValueError(f"unknown ablate channels: {sorted(unknown_a)}")
+        selected -= drop
+    if not selected:
+        raise ValueError("no feature channels left after ablate")
+    return tuple(c for c in ALL_CHANNELS if c in selected)
+
+
+def filter_features_by_channels(
+    features: Dict[str, float], channels: Sequence[str]
+) -> Dict[str, float]:
+    """按通道前缀保留特征（用于消融 train/eval，无需重建语料）。"""
+    prefixes: List[str] = []
+    for ch in channels:
+        if ch not in FEATURE_CHANNELS:
+            raise ValueError(f"unknown feature channel: {ch}")
+        prefixes.extend(FEATURE_CHANNELS[ch])
+    return {
+        k: v
+        for k, v in features.items()
+        if any(k.startswith(p) for p in prefixes)
+    }
 
 
 def _extract_code_blobs(text: str) -> str:

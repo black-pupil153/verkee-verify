@@ -619,7 +619,11 @@ def cursor_tasks(since: str, limit: int, auto_only: bool):
 @click.option("--latest", is_flag=True, help="显示最近一个任务")
 @click.option("--search", default=None, help="按标题搜索任务")
 @click.option("--score", is_flag=True, help="关联智力打分（score_snapshots）")
-@click.option("--inferred", is_flag=True, help="显示盲测推断视图（独立，不计入占比）")
+@click.option(
+    "--inferred",
+    is_flag=True,
+    help="显示逐 turn 盲测细节（默认已对 Auto/Mixed 自动融合推断轨）",
+)
 def cursor_task(
     task_id: Optional[str], latest: bool, search: Optional[str], score: bool, inferred: bool
 ):
@@ -695,9 +699,9 @@ def cursor_task(
             )
     elif report.pending_infer_count > 0:
         console.print(
-            "\n[yellow]有 pending-infer turns：运行 "
-            "ai-verify blindtest train 后默认展示推断轨，"
-            "或用 --inferred 查看细节[/yellow]"
+            "\n[yellow]有 pending-infer turns：已尝试自动推断；"
+            "低于阈值或无 transcript 时仍会保留 pending-infer。"
+            "逐 turn 细节: ai-verify cursor task --inferred[/yellow]"
         )
 
     if report.output_shares:
@@ -766,77 +770,36 @@ def cursor_task(
 
 
 def _render_inferred_view(db, task_id: str, console) -> None:
-    """渲染盲测推断视图（独立，不计入占比）。"""
-    from pathlib import Path
-
+    """渲染盲测推断逐 turn 细节（合并占比由 aggregate_task 融合）。"""
+    from ai_verify.monitor.blindtest_infer import ensure_task_inferences
     from ai_verify.monitor.blindtest_view import get_inferred_view
 
+    ensure_task_inferences(db, task_id)
     view = get_inferred_view(db, task_id)
 
     if view is None:
-        # 无存储推断 → 尝试在线推断
-        _blindtest_model_path_local = Path.home() / ".ai-verify" / "blindtest" / "model.json"
-        if not _blindtest_model_path_local.is_file():
-            console.print(
-                "\n[yellow]── 盲测推断（独立视图，不计入占比）──[/yellow]"
-            )
+        from ai_verify.monitor.blindtest_infer import DEFAULT_MODEL_PATH
+
+        console.print(
+            "\n[yellow]── 盲测推断（逐 turn 细节）──[/yellow]"
+        )
+        if not DEFAULT_MODEL_PATH.is_file():
             console.print(
                 "[dim]无推断记录，且未找到训练模型。"
                 "先运行 ai-verify blindtest train[/dim]"
             )
-            return
-
-        # 有模型但无存储记录 → 运行在线推断并保存
-        try:
-            from ai_verify.blindtest.classifier import BlindModelClassifier
-            from ai_verify.blindtest.corpus import load_turns_for_task
-            from ai_verify.blindtest.features import extract_features
-
-            clf = BlindModelClassifier.load(_blindtest_model_path_local)
-            turns = load_turns_for_task(task_id)
-            if not turns:
-                console.print(
-                    "\n[yellow]── 盲测推断（独立视图，不计入占比）──[/yellow]"
-                )
-                console.print(f"[dim]未找到任务 {task_id} 的 transcript[/dim]")
-                return
-
-            full_task_id = turns[0].conversation_id
-            model_version = f"{clf.backend}-v1"
-            for turn in turns:
-                result = clf.predict_turn(extract_features(turn))
-                db.save_blindtest_inference(
-                    {
-                        "task_id": full_task_id,
-                        "turn_index": turn.turn_index,
-                        "request_id": turn.request_id,
-                        "inferred_model": result.inferred_model,
-                        "probability": result.probability,
-                        "model_version": model_version,
-                    }
-                )
-            view = get_inferred_view(db, task_id)
-        except Exception as exc:
-            console.print(
-                "\n[yellow]── 盲测推断（独立视图，不计入占比）──[/yellow]"
-            )
-            console.print(f"[red]推断失败: {exc}[/red]")
-            return
-
-    if view is None:
-        console.print(
-            "\n[yellow]── 盲测推断（独立视图，不计入占比）──[/yellow]"
-        )
-        console.print("[dim]无推断结果[/dim]")
+        else:
+            console.print("[dim]无推断结果（无 transcript 或全部低于阈值）[/dim]")
         return
 
-    console.print("\n[bold yellow]── 盲测推断（独立视图，不计入占比）──[/bold yellow]")
+    console.print("\n[bold yellow]── 盲测推断（逐 turn 细节）──[/bold yellow]")
     mv_line = f"模型版本: {view.model_version}"
     if view.trained_at:
         mv_line += f"  |  推断时间: {view.trained_at[:16]}"
     console.print(f"[dim]{mv_line}[/dim]")
 
     # Per-turn 表格
+    # NOTE: remainder of function unchanged below — replaced only the preamble.
     console.print(
         f"\n  {'turn':<6} {'推断模型':<22} {'概率':>6}  {'top-2 候选'}"
     )

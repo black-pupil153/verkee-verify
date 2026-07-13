@@ -403,7 +403,7 @@ def read_conversation_summaries(db_path: Path) -> Dict[str, Dict[str, Any]]:
             if "conversationId" not in cols:
                 return {}
             select_cols = ["conversationId"]
-            for optional in ("model", "mode"):
+            for optional in ("model", "mode", "title", "tldr"):
                 if optional in cols:
                     select_cols.append(optional)
             rows = conn.execute(
@@ -417,6 +417,8 @@ def read_conversation_summaries(db_path: Path) -> Dict[str, Dict[str, Any]]:
                     out[str(cid)] = {
                         "model": item.get("model"),
                         "mode": item.get("mode"),
+                        "title": item.get("title"),
+                        "tldr": item.get("tldr"),
                     }
             return out
     except sqlite3.Error:

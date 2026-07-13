@@ -351,7 +351,7 @@ def test_cli_cursor_task_inferred_smoke(db, tmp_path, monkeypatch):
     assert "盲测推断" in result.output
     assert "claude-fable-5" in result.output
     assert "低置信" in result.output
-    assert "不计入占比" in result.output
+    assert "逐 turn" in result.output
 
 
 def test_cli_cursor_task_inferred_no_model_no_record(db, monkeypatch):

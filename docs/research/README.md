@@ -27,9 +27,9 @@
 | Phase | 内容 | 状态 |
 |-------|------|------|
 | G | Hook `model_id` / tokens / duration → 导入事实层 | 已完成 |
-| H | `factual_*` / `inferred_*` / `coverage`；`auto-opaque` → `pending-infer` | 已完成 |
+| H | `factual_*` / `inferred_*` / `coverage`；`auto-opaque` → `pending-infer`；**默认 auto_infer** | 已完成 |
 | C+B | blindtest 轻量代码/文本特征 + hook 标签优先级 | 已完成 |
 
 下一阶段：可选周期探针先验（D/F）、完整 ITT（E）、CodeT5 重模型、proxy merge；扩手选样本与阈值校准。
 
-本机验收（2026-07-13）：`build-corpus` 24 标签样本 → `train` CV 91.7%；Auto `166af1e3` infer 后 coverage 100%（推断不写 `resolved_model`）。
+本机验收（2026-07-13）：`build-corpus` 24 标签样本 → `train` CV 91.7%；Auto `166af1e3` coverage 100%（推断不写 `resolved_model`）；`cursor task` 默认融合推断轨。

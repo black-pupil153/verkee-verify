@@ -630,7 +630,13 @@ class CursorUsageImporter:
                 continue
             header = headers.get(tid, {})
             meta = task_meta.get(tid, {})
-            title = header.get("subtitle") or header.get("title")
+            summary = summaries.get(tid) or {}
+            title = (
+                header.get("subtitle")
+                or header.get("title")
+                or summary.get("title")
+                or summary.get("tldr")
+            )
             mode = meta.get("mode") or header.get("unifiedMode") or "unknown"
 
             events = self.db.get_cursor_events_for_task(tid, since=since_iso)
@@ -680,7 +686,10 @@ class CursorUsageImporter:
             self.db.save_cursor_task(
                 {
                     "task_id": cid,
-                    "title": header.get("subtitle") or header.get("title"),
+                    "title": header.get("subtitle")
+                    or header.get("title")
+                    or (summaries.get(cid) or {}).get("title")
+                    or (summaries.get(cid) or {}).get("tldr"),
                     "mode": header.get("unifiedMode") or "unknown",
                     "route_kind": "unknown",
                     "started_at": created,
@@ -752,8 +761,14 @@ def _load_inferred_by_request(db: Database, task_id: str) -> Dict[str, Dict[str,
     return out
 
 
-def aggregate_task(db: Database, task_id: str) -> Optional[TaskUsageReport]:
-    """聚合单任务用量报告。"""
+def aggregate_task(
+    db: Database, task_id: str, *, auto_infer: bool = True
+) -> Optional[TaskUsageReport]:
+    """聚合单任务用量报告。
+
+    ``auto_infer``: 对仍有 pending-infer 的 Auto/Mixed 任务，在已训练盲测模型时
+    自动写入 ``blindtest_inferences``（不修改 ``resolved_model``）。
+    """
     task = db.get_cursor_task(task_id)
     if not task:
         tasks = db.list_cursor_tasks(limit=500)
@@ -769,6 +784,14 @@ def aggregate_task(db: Database, task_id: str) -> Optional[TaskUsageReport]:
             return None
 
     task_id = task["task_id"]
+    if auto_infer and task.get("route_kind") in ("auto", "mixed"):
+        try:
+            from ai_verify.monitor.blindtest_infer import ensure_task_inferences
+
+            ensure_task_inferences(db, task_id)
+        except Exception:
+            pass
+
     events = db.get_cursor_events_for_task(task_id)
     if not events:
         return TaskUsageReport(

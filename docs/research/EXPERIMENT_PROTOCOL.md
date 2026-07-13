@@ -65,8 +65,30 @@ claude-fable-5 | grok-4.5 | gpt-5.5 | composer-2.5-fast | …
 ### 3.3 数据划分
 
 - 按 **conversation_id** 划分 train/val/test（防 turn 泄漏）
-- 建议 60/20/20；leave-one-conversation-out 作校准（与现分类器一致）
+- 建议 60/20/20；leave-one-conversation-out 仅作无 split 时的诊断（**不是**隐藏 test 盲评）
+- **密封标签**：`ai-verify blindtest split` 写入
+  - `~/.ai-verify/blindtest/splits/<name>.json`（registry：会话 ID 列表）
+  - `~/.ai-verify/blindtest/splits/<name>.sealed.json`（仅 test 标签）
+- 训练进程（`train --split`）只读 registry，**不得**读取 sealed；test 会话永不进 train
+- 评估（`blindtest eval`）再加载 sealed 与预测比对
 
+```bash
+ai-verify blindtest build-corpus --since 30d
+ai-verify blindtest split --name default --seed 42 --ratios 0.6,0.2,0.2
+ai-verify blindtest train --split default
+ai-verify blindtest eval --split default --forced          # Acc@forced（100% coverage）
+ai-verify blindtest eval --split default --tau 0.7 --sweep # Acc@τ + τ sweep
+```
+
+TrainReport / EvalReport 落盘：`~/.ai-verify/blindtest/runs/<ts>/`
+（含 Acc@forced、Acc@τ、macro-F1、混淆矩阵、ECE、Brier；不落 prompt/response 正文）。
+
+双模式：
+
+| 模式 | 含义 |
+|------|------|
+| selective | 现状：概率 < τ 则弃权（abstain） |
+| forced | 强制 top-1，披露 100% coverage 时的诚实准确率 |
 ---
 
 ## 4. Auto 评估集（无 GT 模型名）
@@ -140,9 +162,12 @@ opaque_residual = (# turns still shown as auto-opaque) / total  → 目标 0
 [ ] ai-verify cursor import --since …
 [ ] ai-verify blindtest build-corpus（或等价）
 [ ] 确认标签来源统计：hook / tracking / log 占比
-[ ] train → 记录 TrainReport
-[ ] test 表：Acc / F1 / ECE / 混淆矩阵
-[ ] Auto 集：coverage、opaque_residual、agree_with_fact
+[ ] ai-verify blindtest split --seed …（确认 test 会话数 > 0）
+[ ] ai-verify blindtest train --split … → 记录 TrainReport（runs/<ts>/）
+[ ] 确认训练未加载 *.sealed.json；T 仅在 val 拟合
+[ ] ai-verify blindtest eval --forced / --tau / --sweep
+[ ] test 表：Acc@forced / Acc@τ / F1 / ECE / Brier / 混淆矩阵
+[ ] Auto 集：coverage、opaque_residual、agree_with_fact（Phase 2）
 [ ] 更新 FEASIBILITY 中的「实测」列（实现阶段）
 ```
 

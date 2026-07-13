@@ -507,6 +507,35 @@ def build_corpus(
     return corpus
 
 
+def exclude_conversations(
+    corpus: Corpus, conversation_ids: Iterable[str]
+) -> Corpus:
+    """返回排除指定会话后的语料副本（用于 train 路径剔除 test）。"""
+    banned = set(conversation_ids)
+    samples = [s for s in corpus.samples if s.conversation_id not in banned]
+    class_counts: Dict[str, int] = {}
+    for s in samples:
+        if s.label:
+            class_counts[s.label] = class_counts.get(s.label, 0) + 1
+    stats = dict(corpus.stats)
+    stats.update(
+        {
+            "samples": len(samples),
+            "labeled": sum(1 for s in samples if s.label),
+            "class_counts": class_counts,
+            "excluded_conversations": len(banned),
+        }
+    )
+    return Corpus(samples=samples, built_at=corpus.built_at, stats=stats)
+
+
+def samples_excluding(
+    samples: Iterable[CorpusSample], conversation_ids: Iterable[str]
+) -> List[CorpusSample]:
+    banned = set(conversation_ids)
+    return [s for s in samples if s.conversation_id not in banned]
+
+
 def save_corpus(corpus: Corpus, blindtest_dir: Optional[Path] = None) -> Path:
     out_dir = blindtest_dir or DEFAULT_BLINDTEST_DIR
     out_dir.mkdir(parents=True, exist_ok=True)

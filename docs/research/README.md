@@ -30,6 +30,6 @@
 | H | `factual_*` / `inferred_*` / `coverage`；`auto-opaque` → `pending-infer`；**默认 auto_infer** | 已完成 |
 | C+B | blindtest 轻量代码/文本特征 + hook 标签优先级 | 已完成 |
 
-下一阶段：可选周期探针先验（D/F）、完整 ITT（E）、CodeT5 重模型、proxy merge；扩手选样本与阈值校准。
+**Phase 1 已落地并本机跑通**（split + 密封标签 + forced/selective eval）。下一阶段仅用户点名：Phase 2 扩手选样本 / Auto 弱验证；Phase 3 微调后置。可选 D/F、ITT、proxy merge — 仅用户点名。
 
-本机验收（2026-07-13）：`build-corpus` 24 标签样本 → `train` CV 91.7%；Auto `166af1e3` coverage 100%（推断不写 `resolved_model`）；`cursor task` 默认融合推断轨。
+本机验收（2026-07-13）：`build-corpus` 24 样本 → LOCO-CV **91.7%（非盲评）**；隐藏 test Acc@forced **66.7%**（n=3，τ≥0.7 coverage 0%）。详见 `docs/PROJECT_STATUS.md`。Auto `166af1e3` coverage 100%（推断不写 `resolved_model`）。

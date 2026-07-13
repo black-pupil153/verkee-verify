@@ -47,6 +47,10 @@ class TrainReport:
     feature_count: int
     trained_at: str
     notes: List[str] = field(default_factory=list)
+    split_name: Optional[str] = None
+    n_train: Optional[int] = None
+    n_val: Optional[int] = None
+    val_accuracy: Optional[float] = None
 
 
 def _softmax(logits: Sequence[float]) -> List[float]:
@@ -227,7 +231,23 @@ class BlindModelClassifier:
 
     # ------------------------------------------------------------- training
 
-    def train(self, corpus: Any) -> TrainReport:
+    def train(
+        self,
+        corpus: Any,
+        *,
+        split: Any = None,
+        split_name: Optional[str] = None,
+    ) -> TrainReport:
+        """训练 + 温度校准。
+
+        - 无 split：leave-one-conversation-out CV + 在留出 logits 上拟合 T（兼容旧路径）
+        - 有 split：只用 train 拟合权重，T **只在 val** 上拟合；test 不得带标签
+        """
+        if split is not None:
+            return self._train_with_split(corpus, split, split_name=split_name)
+        return self._train_loco(corpus)
+
+    def _train_loco(self, corpus: Any) -> TrainReport:
         """训练 + leave-one-conversation-out 交叉验证 + 温度校准。"""
         samples = _extract_samples(corpus)
         if len(samples) < 4:
@@ -320,6 +340,110 @@ class BlindModelClassifier:
             feature_count=len(self.feature_names),
             trained_at=datetime.now().isoformat(),
             notes=notes,
+        )
+
+    def _train_with_split(
+        self, corpus: Any, split: Any, *, split_name: Optional[str] = None
+    ) -> TrainReport:
+        """尊重 split：train 拟合、val 校准 T、test 标签不可见。"""
+        from ai_verify.blindtest.splits import (
+            assert_no_test_labels,
+            filter_samples,
+            strip_test_labels,
+        )
+
+        # 内存密封：即使语料仍带 test 标签，训练路径也先剥掉
+        if hasattr(corpus, "samples"):
+            open_corpus = strip_test_labels(corpus, split)
+            all_samples = open_corpus.samples
+        else:
+            all_samples = list(corpus)
+            assert_no_test_labels(all_samples, split)
+
+        assert_no_test_labels(all_samples, split)
+
+        train_samples = filter_samples(all_samples, split, "train", labeled_only=True)
+        val_samples = filter_samples(all_samples, split, "val", labeled_only=True)
+
+        if len(train_samples) < 4:
+            raise ValueError(
+                f"train labeled samples too few ({len(train_samples)}); need at least 4"
+            )
+        classes = sorted({s.label for s in train_samples if s.label})
+        if len(classes) < 2:
+            raise ValueError(
+                f"need at least 2 classes in train, got {classes}; "
+                "collect data from more manually-selected model tasks"
+            )
+
+        notes: List[str] = [
+            f"split={split_name or getattr(split, 'name', 'custom')}: "
+            f"train={len(train_samples)} val={len(val_samples)}; "
+            f"T fit on val only; test sealed"
+        ]
+
+        feature_dicts = [s.features for s in train_samples]
+        self._fit_vocab(feature_dicts)
+        X_train = [self._vectorize(s.features) for s in train_samples]
+        y_train = [s.label for s in train_samples]
+
+        weights = self._fit_model(X_train, y_train, classes)
+        self._apply_weights(weights)
+
+        # 温度只在 val 上拟合
+        val_accuracy: Optional[float] = None
+        per_class_accuracy: Dict[str, float] = {}
+        if val_samples:
+            val_logits: List[List[float]] = []
+            val_labels: List[str] = []
+            val_classes: List[List[str]] = []
+            for s in val_samples:
+                vec = self._vectorize(s.features)
+                val_logits.append(self._logits(vec))
+                val_labels.append(s.label)
+                val_classes.append(self.classes)
+            self.temperature = self._fit_temperature(val_logits, val_labels, val_classes)
+
+            correct = 0
+            per_hit: Dict[str, List[int]] = {c: [0, 0] for c in classes}
+            for logits, label in zip(val_logits, val_labels):
+                probs = _softmax([z / self.temperature for z in logits])
+                pred = self.classes[probs.index(max(probs))]
+                hit = 1 if pred == label else 0
+                correct += hit
+                if label in per_hit:
+                    per_hit[label][0] += hit
+                    per_hit[label][1] += 1
+            val_accuracy = correct / len(val_labels)
+            per_class_accuracy = {
+                c: (h / t) for c, (h, t) in per_hit.items() if t > 0
+            }
+        else:
+            notes.append("no val samples; temperature left at 1.0")
+            self.temperature = 1.0
+
+        class_counts: Dict[str, int] = {}
+        for label in y_train:
+            class_counts[label] = class_counts.get(label, 0) + 1
+
+        n_convs = len({s.conversation_id for s in train_samples})
+        return TrainReport(
+            backend=self.backend,
+            n_samples=len(train_samples),
+            n_conversations=n_convs,
+            class_counts=class_counts,
+            cv_accuracy=None,  # split 路径不以 LOCO-CV 充当盲评
+            cv_evaluated=0,
+            cv_skipped=0,
+            per_class_accuracy=per_class_accuracy,
+            temperature=self.temperature,
+            feature_count=len(self.feature_names),
+            trained_at=datetime.now().isoformat(),
+            notes=notes,
+            split_name=split_name or getattr(split, "name", None),
+            n_train=len(train_samples),
+            n_val=len(val_samples),
+            val_accuracy=val_accuracy,
         )
 
     @staticmethod

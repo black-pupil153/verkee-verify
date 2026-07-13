@@ -994,12 +994,23 @@ def blindtest_build_corpus(since: Optional[str], include_unlabeled: bool):
         )
 
 
-@blindtest.command("train")
-@click.option("--threshold", default=0.7, show_default=True, help="推断概率阈值")
-def blindtest_train(threshold: float):
-    """训练盲测分类器并输出 TrainReport"""
-    from ai_verify.blindtest.classifier import BlindModelClassifier
+@blindtest.command("split")
+@click.option("--name", default="default", show_default=True, help="split registry 名称")
+@click.option("--seed", default=42, show_default=True, type=int, help="可复现随机种子")
+@click.option(
+    "--ratios",
+    default="0.6,0.2,0.2",
+    show_default=True,
+    help="train,val,test 比例（按 conversation_id）",
+)
+def blindtest_split(name: str, seed: int, ratios: str):
+    """按 conversation_id 创建 train/val/test 划分并密封 test 标签"""
     from ai_verify.blindtest.corpus import load_corpus
+    from ai_verify.blindtest.splits import (
+        create_split,
+        extract_sealed_labels,
+        save_split,
+    )
 
     try:
         corpus = load_corpus()
@@ -1007,15 +1018,101 @@ def blindtest_train(threshold: float):
         console.print("[red]✗ 未找到语料，请先运行 ai-verify blindtest build-corpus[/red]")
         raise SystemExit(1)
 
+    try:
+        parts = tuple(float(x.strip()) for x in ratios.split(","))
+        if len(parts) != 3:
+            raise ValueError("need 3 ratios")
+    except ValueError:
+        console.print("[red]✗ --ratios 格式应为 train,val,test，如 0.6,0.2,0.2[/red]")
+        raise SystemExit(1)
+
+    try:
+        split = create_split(corpus, name=name, seed=seed, ratios=parts)
+    except ValueError as exc:
+        console.print(f"[red]✗ 划分失败: {exc}[/red]")
+        raise SystemExit(1)
+
+    sealed = extract_sealed_labels(corpus, split)
+    reg_path, sealed_path = save_split(split, sealed)
+
+    console.print(f"[green]✓[/green] split registry: {reg_path}")
+    console.print(f"[green]✓[/green] sealed labels: {sealed_path} ({len(sealed)} 条)")
+    table = Table(title=f"Split [{name}] seed={seed}")
+    table.add_column("部分", style="cyan")
+    table.add_column("会话数", justify="right")
+    table.add_row("train", str(len(split.train_ids)))
+    table.add_row("val", str(len(split.val_ids)))
+    table.add_row("test", str(len(split.test_ids)))
+    console.print(table)
+    console.print(
+        "[dim]训练进程只读 registry，不读 sealed；"
+        "test 会话永不进 train。[/dim]"
+    )
+    for note in split.notes:
+        console.print(f"[yellow]note: {note}[/yellow]")
+
+
+@blindtest.command("train")
+@click.option("--threshold", default=0.7, show_default=True, help="推断概率阈值")
+@click.option(
+    "--split",
+    "split_name",
+    default=None,
+    help="使用已保存的 split（train 拟合 / val 校准 T；不读 test 密封标签）",
+)
+def blindtest_train(threshold: float, split_name: Optional[str]):
+    """训练盲测分类器并输出 TrainReport"""
+    from ai_verify.blindtest.classifier import BlindModelClassifier
+    from ai_verify.blindtest.corpus import load_corpus
+    from ai_verify.blindtest.eval import new_run_dir, save_run_artifacts
+
+    try:
+        corpus = load_corpus()
+    except FileNotFoundError:
+        console.print("[red]✗ 未找到语料，请先运行 ai-verify blindtest build-corpus[/red]")
+        raise SystemExit(1)
+
+    split = None
+    if split_name is not None:
+        from ai_verify.blindtest.splits import load_split, strip_test_labels
+
+        try:
+            split = load_split(split_name)
+        except FileNotFoundError:
+            console.print(
+                f"[red]✗ 未找到 split [{split_name}]，"
+                f"请先运行 ai-verify blindtest split --name {split_name}[/red]"
+            )
+            raise SystemExit(1)
+        # 训练路径：剥掉 test 标签，永不加载 .sealed.json
+        corpus = strip_test_labels(corpus, split)
+        console.print(
+            f"[cyan]使用 split [{split_name}]："
+            f"train={len(split.train_ids)} val={len(split.val_ids)} "
+            f"test={len(split.test_ids)}（密封）[/cyan]"
+        )
+
     clf = BlindModelClassifier(threshold=threshold)
     try:
-        report = clf.train(corpus)
-    except ValueError as exc:
+        report = clf.train(corpus, split=split, split_name=split_name)
+    except (ValueError, RuntimeError) as exc:
         console.print(f"[red]✗ 训练失败: {exc}[/red]")
         raise SystemExit(1)
 
     clf.save(_blindtest_model_path())
+    run_dir = new_run_dir()
+    save_run_artifacts(
+        run_dir,
+        train_report=report,
+        meta={
+            "command": "train",
+            "split": split_name,
+            "model_path": str(_blindtest_model_path()),
+            "threshold": threshold,
+        },
+    )
     console.print(f"[green]✓[/green] 模型已保存: {_blindtest_model_path()}")
+    console.print(f"[green]✓[/green] TrainReport: {run_dir / 'train_report.json'}")
 
     table = Table(title="TrainReport")
     table.add_column("指标", style="cyan")
@@ -1023,8 +1120,18 @@ def blindtest_train(threshold: float):
     table.add_row("backend", report.backend)
     table.add_row("样本数", str(report.n_samples))
     table.add_row("会话数", str(report.n_conversations))
-    cv = f"{report.cv_accuracy:.1%}" if report.cv_accuracy is not None else "N/A"
-    table.add_row("CV 准确率 (留一会话)", f"{cv} ({report.cv_evaluated} 条留出)")
+    if report.split_name:
+        table.add_row("split", report.split_name)
+        table.add_row("n_train / n_val", f"{report.n_train} / {report.n_val}")
+        va = f"{report.val_accuracy:.1%}" if report.val_accuracy is not None else "N/A"
+        table.add_row("Val 准确率 (非盲评)", va)
+    else:
+        cv = f"{report.cv_accuracy:.1%}" if report.cv_accuracy is not None else "N/A"
+        table.add_row("CV 准确率 (留一会话)", f"{cv} ({report.cv_evaluated} 条留出)")
+        console.print(
+            "[yellow]注意: LOCO-CV 不是隐藏 test 盲评；"
+            "请用 blindtest split + train --split + eval[/yellow]"
+        )
     table.add_row("校准温度", f"{report.temperature:.2f}")
     table.add_row("特征维度", str(report.feature_count))
     console.print(table)
@@ -1032,13 +1139,150 @@ def blindtest_train(threshold: float):
     table2 = Table(title="每类明细")
     table2.add_column("模型", style="cyan")
     table2.add_column("样本数", justify="right")
-    table2.add_column("CV 准确率", justify="right")
+    table2.add_column("准确率", justify="right")
     for model, count in sorted(report.class_counts.items(), key=lambda x: -x[1]):
         acc = report.per_class_accuracy.get(model)
         table2.add_row(model, str(count), f"{acc:.0%}" if acc is not None else "-")
     console.print(table2)
     for note in report.notes:
         console.print(f"[yellow]note: {note}[/yellow]")
+
+
+@blindtest.command("eval")
+@click.option(
+    "--split",
+    "split_name",
+    default="default",
+    show_default=True,
+    help="使用密封 test 标签的 split 名称",
+)
+@click.option("--forced", is_flag=True, help="强制 top-1（100% coverage 诚实准确率）")
+@click.option("--tau", default=None, type=float, help="selective 模式阈值（默认用模型阈值）")
+@click.option("--sweep", is_flag=True, help="扫描 τ∈{0.5,0.6,0.7,0.8,0.9}")
+def blindtest_eval(split_name: str, forced: bool, tau: Optional[float], sweep: bool):
+    """在密封 test 集上评估（Acc@forced / Acc@τ / F1 / ECE / Brier）"""
+    from ai_verify.blindtest.classifier import BlindModelClassifier
+    from ai_verify.blindtest.corpus import load_corpus
+    from ai_verify.blindtest.eval import (
+        evaluate_classifier,
+        new_run_dir,
+        save_run_artifacts,
+    )
+    from ai_verify.blindtest.splits import (
+        filter_samples,
+        load_sealed_labels,
+        load_split,
+        strip_test_labels,
+    )
+
+    model_path = _blindtest_model_path()
+    if not model_path.is_file():
+        console.print("[red]✗ 未找到模型，请先运行 ai-verify blindtest train --split …[/red]")
+        raise SystemExit(1)
+
+    try:
+        corpus = load_corpus()
+        split = load_split(split_name)
+        sealed = load_sealed_labels(split_name)
+    except FileNotFoundError as exc:
+        console.print(f"[red]✗ {exc}[/red]")
+        raise SystemExit(1)
+
+    # 评估用特征：从剥标签后的语料取 test 样本，标签只来自 sealed
+    open_corpus = strip_test_labels(corpus, split)
+    test_samples = filter_samples(
+        open_corpus.samples, split, "test", labeled_only=False
+    )
+    # 只保留密封文件中有标签的 turn
+    test_samples = [
+        s
+        for s in test_samples
+        if (s.conversation_id, s.turn_index) in sealed
+    ]
+    if not test_samples:
+        console.print("[red]✗ test 集为空或无密封标签[/red]")
+        raise SystemExit(1)
+
+    clf = BlindModelClassifier.load(model_path)
+    report = evaluate_classifier(
+        clf,
+        test_samples,
+        forced=forced,
+        tau=tau,
+        sweep=sweep,
+        sealed=sealed,
+        split_name=split_name,
+        model_path=str(model_path),
+    )
+
+    run_dir = new_run_dir()
+    save_run_artifacts(
+        run_dir,
+        eval_reports=[report],
+        meta={
+            "command": "eval",
+            "split": split_name,
+            "forced": forced,
+            "tau": tau,
+            "sweep": sweep,
+            "n_test": len(test_samples),
+        },
+    )
+
+    mode = "forced top-1" if forced else f"selective τ={report.threshold}"
+    console.print(
+        f"[green]✓[/green] 盲评 [{split_name}] {mode} — "
+        f"{report.n_samples} 样本 / {report.n_conversations} 会话"
+    )
+    console.print(f"[green]✓[/green] EvalReport: {run_dir / 'eval_report.json'}")
+
+    table = Table(title="EvalReport (隐藏 test)")
+    table.add_column("指标", style="cyan")
+    table.add_column("值", style="green")
+    acc_key = "Acc@forced" if forced else "Acc@τ"
+    acc = f"{report.accuracy:.1%}" if report.accuracy is not None else "N/A"
+    table.add_row(acc_key, acc)
+    if not forced:
+        cov = f"{report.coverage:.1%}" if report.coverage is not None else "N/A"
+        table.add_row("coverage", cov)
+        table.add_row("abstained", str(report.abstained))
+    mf1 = f"{report.macro_f1:.3f}" if report.macro_f1 is not None else "N/A"
+    table.add_row("macro-F1", mf1)
+    ece = f"{report.ece:.3f}" if report.ece is not None else "N/A"
+    brier = f"{report.brier:.3f}" if report.brier is not None else "N/A"
+    table.add_row("ECE", ece)
+    table.add_row("Brier", brier)
+    console.print(table)
+
+    if report.confusion_matrix:
+        classes = report.classes
+        cm = Table(title="混淆矩阵 (行=真值, 列=预测)")
+        cm.add_column("true\\pred", style="cyan")
+        for p in classes:
+            cm.add_column(p[:16], justify="right")
+        for t in classes:
+            row = [t[:16]]
+            for p in classes:
+                row.append(str(report.confusion_matrix.get(t, {}).get(p, 0)))
+            cm.add_row(*row)
+        console.print(cm)
+
+    if report.tau_sweep:
+        sw = Table(title="τ sweep")
+        sw.add_column("τ", justify="right")
+        sw.add_column("Acc", justify="right")
+        sw.add_column("coverage", justify="right")
+        sw.add_column("macro-F1", justify="right")
+        sw.add_column("ECE", justify="right")
+        for row in report.tau_sweep:
+            sw.add_row(
+                f"{row['tau']:.1f}",
+                f"{row['accuracy']:.1%}" if row["accuracy"] is not None else "-",
+                f"{row['coverage']:.1%}" if row["coverage"] is not None else "-",
+                f"{row['macro_f1']:.3f}" if row["macro_f1"] is not None else "-",
+                f"{row['ece']:.3f}" if row["ece"] is not None else "-",
+            )
+        console.print(sw)
 
 
 @blindtest.command("infer")
@@ -1106,6 +1350,9 @@ def blindtest_infer(task_id: str, save_db: bool):
     console.print(table)
     if db is not None:
         console.print("[dim]结果已写入 blindtest_inferences 表[/dim]")
+        console.print(
+            "[dim]推断不写入 resolved_model（factual / inferred 分轨）。[/dim]"
+        )
 
 
 if __name__ == "__main__":

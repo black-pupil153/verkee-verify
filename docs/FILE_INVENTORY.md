@@ -79,7 +79,9 @@ ai-verify/
 | `ai_verify/blindtest/__init__.py` | 盲测模块导出入口。 |
 | `ai_verify/blindtest/features.py` | 文风 / 行为 / 时延 / 轻量代码风格特征（哈希桶，不落正文）。 |
 | `ai_verify/blindtest/corpus.py` | 从 transcripts、hooks、logs、tracking DB 构建带标签语料（hook `model_id` 优先）。 |
-| `ai_verify/blindtest/classifier.py` | 训练和运行底层模型风格分类器，支持 sklearn 与纯 Python 回退。 |
+| `ai_verify/blindtest/classifier.py` | 训练和运行底层模型风格分类器，支持 sklearn 与纯 Python 回退；可选 split（T 仅 val）。 |
+| `ai_verify/blindtest/splits.py` | 按 conversation_id 的 train/val/test registry 与密封标签。 |
+| `ai_verify/blindtest/eval.py` | 盲评指标（Acc@forced / Acc@τ / F1 / ECE / Brier）与 runs 落盘。 |
 
 ### 代理、存储和供应商
 
@@ -122,6 +124,7 @@ ai-verify/
 | `tests/test_blindtest_features.py` | 盲测特征提取的稳定性、文本结构、行为和延迟特征。 |
 | `tests/test_blindtest_corpus.py` | transcripts 分段、日志/tracking 标签合并、语料保存加载。 |
 | `tests/test_blindtest_classifier.py` | 盲测分类器训练、阈值、保存加载、纯 Python 回退。 |
+| `tests/test_blindtest_eval.py` | split registry、密封标签、forced/selective 评估与 runs 落盘。 |
 | `tests/test_blindtest_view.py` | 盲测推断视图、版本过滤、任务前缀匹配和 CLI smoke。 |
 | `tests/fixtures/cursor/create_ai_tracking_sample.py` | 生成 Cursor ai-tracking 测试样本库。 |
 | `tests/fixtures/cursor/structured_log_sample.log` | Cursor structured log 解析测试夹具，作为 `.log` 例外纳入 Git。 |

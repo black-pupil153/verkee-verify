@@ -534,12 +534,22 @@ def cursor_doctor(as_json: bool):
     console.print("[bold]Cursor Auto Usage — 环境诊断[/bold]\n")
 
     for check in report.checks:
-        mark = "[green]✓[/green]" if check.ok else "[red]✗[/red]"
+        if check.ok:
+            mark = "[green]✓[/green]"
+        elif check.optional:
+            mark = "[yellow]⚠[/yellow]"
+        else:
+            mark = "[red]✗[/red]"
         console.print(f"{mark} {check.name:<18} {check.detail}")
 
     console.print("\n[bold]可采集字段:[/bold]")
     for label, via, _source in report.collectable_fields:
         console.print(f"  {label:<24} {via}")
+
+    if report.warnings:
+        console.print("\n[yellow]可选源警告（不阻断）:[/yellow]")
+        for warning in report.warnings:
+            console.print(f"  ⚠ {warning.name}: {warning.detail}")
 
     if report.suggestion:
         console.print(f"\n[dim]建议: {report.suggestion}[/dim]")

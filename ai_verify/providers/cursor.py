@@ -448,6 +448,8 @@ class DoctorCheck:
     ok: bool
     detail: str
     extra: Dict[str, Any] = field(default_factory=dict)
+    optional: bool = False
+    severity: str = "error"  # error | warning | info
 
 
 @dataclass
@@ -459,19 +461,39 @@ class DoctorReport:
     def add(self, check: DoctorCheck) -> None:
         self.checks.append(check)
 
+    @property
+    def required_ok(self) -> bool:
+        required = [c for c in self.checks if not c.optional]
+        return all(c.ok for c in required) if required else False
+
+    @property
+    def warnings(self) -> List[DoctorCheck]:
+        return [
+            c
+            for c in self.checks
+            if c.optional and (not c.ok or c.severity == "warning")
+        ]
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize for CLI --json / extension bridge."""
         return {
-            "ok": all(c.ok for c in self.checks) if self.checks else False,
+            # Overall health ignores optional/supplement sources.
+            "ok": self.required_ok,
             "checks": [
                 {
                     "name": c.name,
                     "ok": c.ok,
                     "detail": c.detail,
+                    "optional": c.optional,
+                    "severity": c.severity,
                     # extra may contain Path / large schema blobs; keep lean
                     "extra_keys": sorted(c.extra.keys()) if c.extra else [],
                 }
                 for c in self.checks
+            ],
+            "warnings": [
+                {"name": c.name, "detail": c.detail, "severity": c.severity}
+                for c in self.warnings
             ],
             "collectable_fields": [
                 {"label": label, "via": via, "source": source}
@@ -590,16 +612,32 @@ def run_doctor(ai_verify_db: Optional[Path] = None) -> DoctorReport:
             )
         )
 
-    # proxy supplement
+    # proxy supplement (optional): missing data is degraded, not blocking
     verify_db = ai_verify_db or (Path.home() / ".ai-verify" / "data" / "ai_verify.db")
     proxy_count = count_proxy_cursor_calls(verify_db)
-    report.add(
-        DoctorCheck(
-            name="proxy supplement",
-            ok=proxy_count > 0,
-            detail=f"{proxy_count} cursor-related api_calls",
+    if proxy_count > 0:
+        report.add(
+            DoctorCheck(
+                name="proxy supplement",
+                ok=True,
+                detail=f"{proxy_count} cursor-related api_calls",
+                optional=True,
+                severity="info",
+            )
         )
-    )
+    else:
+        report.add(
+            DoctorCheck(
+                name="proxy supplement",
+                ok=False,
+                detail=(
+                    f"{proxy_count} cursor-related api_calls "
+                    "(optional; core Cursor sources still usable)"
+                ),
+                optional=True,
+                severity="warning",
+            )
+        )
 
     report.collectable_fields = [
         ("resolved_model (high)", "via ai_code_hashes.model", "ai_tracking_db"),

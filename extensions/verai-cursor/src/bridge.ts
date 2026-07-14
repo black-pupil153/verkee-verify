@@ -32,7 +32,14 @@ export class AiVerifyBridgeError extends Error {
 
 export type DoctorPayload = {
   ok: boolean;
-  checks: Array<{ name: string; ok: boolean; detail: string }>;
+  checks: Array<{
+    name: string;
+    ok: boolean;
+    detail: string;
+    optional?: boolean;
+    severity?: "error" | "warning" | "info";
+  }>;
+  warnings?: Array<{ name: string; detail: string; severity?: string }>;
   suggestion?: string;
 };
 

@@ -22,7 +22,14 @@ def test_doctor_report_to_dict_lean():
         checks=[
             DoctorCheck(
                 name="ai-tracking.db", ok=True, detail="ok", extra={"tables": {}}
-            )
+            ),
+            DoctorCheck(
+                name="proxy supplement",
+                ok=False,
+                detail="0 cursor-related api_calls",
+                optional=True,
+                severity="warning",
+            ),
         ],
         collectable_fields=[("model", "hook", "hooks")],
         suggestion="install hooks",
@@ -31,8 +38,30 @@ def test_doctor_report_to_dict_lean():
     assert payload["ok"] is True
     assert payload["checks"][0]["name"] == "ai-tracking.db"
     assert payload["checks"][0]["extra_keys"] == ["tables"]
+    assert payload["checks"][0]["optional"] is False
     assert "extra" not in payload["checks"][0]
+    assert payload["checks"][1]["optional"] is True
+    assert payload["checks"][1]["severity"] == "warning"
+    assert payload["warnings"][0]["name"] == "proxy supplement"
     assert payload["collectable_fields"][0]["label"] == "model"
+
+
+def test_doctor_report_required_failure_sets_ok_false():
+    report = DoctorReport(
+        checks=[
+            DoctorCheck(name="ai-tracking.db", ok=False, detail="missing"),
+            DoctorCheck(
+                name="proxy supplement",
+                ok=True,
+                detail="12 cursor-related api_calls",
+                optional=True,
+                severity="info",
+            ),
+        ]
+    )
+    payload = report.to_dict()
+    assert payload["ok"] is False
+    assert payload["warnings"] == []
 
 
 def test_task_report_to_dict_omits_per_request_by_default():

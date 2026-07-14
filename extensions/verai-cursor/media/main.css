@@ -81,6 +81,10 @@ button#refresh {
   color: var(--ok);
 }
 
+.pill.warn {
+  color: var(--warning);
+}
+
 .pill.bad {
   color: var(--bad);
 }

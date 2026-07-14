@@ -5,7 +5,29 @@ const { AiVerifyBridge, AiVerifyBridgeError } = require("../out/bridge");
 
 const doctorPayload = {
   ok: true,
-  checks: [{ name: "workspaceStorage", ok: true, detail: "found" }],
+  checks: [
+    {
+      name: "workspaceStorage",
+      ok: true,
+      detail: "found",
+      optional: false,
+      severity: "error",
+    },
+    {
+      name: "proxy supplement",
+      ok: false,
+      detail: "0 cursor-related api_calls (optional)",
+      optional: true,
+      severity: "warning",
+    },
+  ],
+  warnings: [
+    {
+      name: "proxy supplement",
+      detail: "0 cursor-related api_calls (optional)",
+      severity: "warning",
+    },
+  ],
   suggestion: "ready",
 };
 
@@ -66,6 +88,8 @@ test("doctor JSON contract and command", async () => {
 
   const result = await bridge.doctor();
   assert.equal(result.ok, true);
+  assert.equal(result.checks[1].optional, true);
+  assert.equal(result.warnings[0].name, "proxy supplement");
   assert.deepEqual(result.checks, doctorPayload.checks);
   assert.equal(calls[0].executable, "/custom/ai-verify");
   assert.deepEqual(calls[0].args, ["cursor", "doctor", "--json"]);

@@ -42,14 +42,34 @@ window.addEventListener("message", (event) => {
 
 function renderDoctor(data) {
   if (!data) return;
-  const ok = data.ok ? "ok" : "bad";
-  const failed = (data.checks || []).filter((c) => !c.ok).map((c) => c.name);
+  const warnings = data.warnings || (data.checks || []).filter(
+    (c) => c.optional && (!c.ok || c.severity === "warning")
+  );
+  const blocking = (data.checks || []).filter((c) => !c.ok && !c.optional);
+  let pillClass = "ok";
+  let pillLabel = "doctor green";
+  if (!data.ok) {
+    pillClass = "bad";
+    pillLabel = "doctor needs fix";
+  } else if (warnings.length) {
+    pillClass = "warn";
+    pillLabel = `doctor green · ${warnings.length} warning${warnings.length === 1 ? "" : "s"}`;
+  }
+  const failedNames = blocking.map((c) => c.name);
+  const warningNames = warnings.map((c) => c.name);
   el.doctor.innerHTML = `
-    <div class="pill ${ok}">doctor ${data.ok ? "green" : "needs fix"}</div>
-    ${failed.length ? `<p class="muted">Failed: ${escapeHtml(failed.join(", "))}</p>` : ""}
+    <div class="pill ${pillClass}">${escapeHtml(pillLabel)}</div>
+    ${failedNames.length ? `<p class="muted">Failed: ${escapeHtml(failedNames.join(", "))}</p>` : ""}
+    ${warningNames.length ? `<p class="muted">Optional warnings: ${escapeHtml(warningNames.join(", "))}</p>` : ""}
     ${data.suggestion ? `<p class="fix">${escapeHtml(data.suggestion)}</p>` : ""}
   `;
-  el.status.textContent = data.ok ? "Ready" : "Fix doctor issues to load shares";
+  if (!data.ok) {
+    el.status.textContent = "Fix required doctor issues to load shares";
+  } else if (warnings.length) {
+    el.status.textContent = "Ready (optional sources degraded)";
+  } else {
+    el.status.textContent = "Ready";
+  }
 }
 
 function renderTasks(data) {

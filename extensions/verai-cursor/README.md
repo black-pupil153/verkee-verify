@@ -84,7 +84,8 @@ ai-verify cursor task --latest --json
 | 状态 | 处理方式 |
 |------|----------|
 | CLI not found | 设置 `verai.aiVerifyPath` 为绝对路径 |
-| doctor needs fix | 在终端运行 `ai-verify cursor doctor` 并按 suggestion 修复 |
+| doctor needs fix | 在终端运行 `ai-verify cursor doctor` 并按 suggestion 修复核心数据源 |
+| doctor green · N warnings | 可选源（如 proxy supplement）缺失；占比仍可加载 |
 | invalid JSON | 更新本地 VerAI CLI，使版本与插件匹配 |
 | import warning | 面板会继续展示缓存；在终端运行 import 查看详情 |
 | No recent sessions | 执行 `ai-verify cursor import --since 7d` 扩大时间范围 |

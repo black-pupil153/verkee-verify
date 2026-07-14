@@ -128,4 +128,60 @@ def test_run_doctor_minimal(tmp_path, monkeypatch):
     report = run_doctor(ai_verify_db=tmp_path / "missing.db")
     names = [c.name for c in report.checks]
     assert "ai-tracking.db" in names
+    proxy = next(c for c in report.checks if c.name == "proxy supplement")
+    assert proxy.optional is True
+    assert proxy.ok is False
+    assert proxy.severity == "warning"
+    # Optional proxy must not decide overall health.
+    required = [c for c in report.checks if not c.optional]
+    assert report.required_ok == all(c.ok for c in required)
+    assert report.to_dict()["ok"] == report.required_ok
+    assert any(w["name"] == "proxy supplement" for w in report.to_dict()["warnings"])
     assert report.suggestion.startswith("ai-verify cursor import")
+
+
+def test_run_doctor_optional_proxy_does_not_fail_when_core_ok(tmp_path, monkeypatch):
+    cursor_home = tmp_path / "cursor_home"
+    ai_tracking = cursor_home / "ai-tracking" / "ai-code-tracking.db"
+    ai_tracking.parent.mkdir(parents=True)
+
+    import sqlite3
+
+    with sqlite3.connect(ai_tracking) as conn:
+        conn.execute(
+            "CREATE TABLE ai_code_hashes (hash TEXT PRIMARY KEY, source TEXT, model TEXT)"
+        )
+        conn.commit()
+
+    app_support = tmp_path / "App" / "Cursor"
+    logs = app_support / "logs" / "20260714T120000"
+    logs.mkdir(parents=True)
+    (logs / "window1" / "renderer.log").parent.mkdir(parents=True)
+    (logs / "window1" / "renderer.log").write_text('{"type":"test"}\n')
+
+    state_db = app_support / "User" / "globalStorage" / "state.vscdb"
+    state_db.parent.mkdir(parents=True)
+    with sqlite3.connect(state_db) as conn:
+        conn.execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)")
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
+            ("composer.composerHeaders", "{}"),
+        )
+        conn.commit()
+
+    projects = cursor_home / "projects" / "demo" / "agent-transcripts" / "task-1"
+    projects.mkdir(parents=True)
+    (projects / "transcript.jsonl").write_text("{}\n")
+
+    monkeypatch.setattr("ai_verify.providers.cursor._cursor_home", lambda: cursor_home)
+    monkeypatch.setattr(
+        "ai_verify.providers.cursor._cursor_app_support", lambda: app_support
+    )
+
+    report = run_doctor(ai_verify_db=tmp_path / "missing.db")
+    payload = report.to_dict()
+    assert payload["ok"] is True
+    assert any(w["name"] == "proxy supplement" for w in payload["warnings"])
+    assert all(
+        c["ok"] or c.get("optional") for c in payload["checks"]
+    )

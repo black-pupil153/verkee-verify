@@ -6,7 +6,29 @@ import type {
 
 export const doctorContract = {
   ok: true,
-  checks: [{ name: "workspaceStorage", ok: true, detail: "found" }],
+  checks: [
+    {
+      name: "workspaceStorage",
+      ok: true,
+      detail: "found",
+      optional: false,
+      severity: "error",
+    },
+    {
+      name: "proxy supplement",
+      ok: false,
+      detail: "0 cursor-related api_calls (optional)",
+      optional: true,
+      severity: "warning",
+    },
+  ],
+  warnings: [
+    {
+      name: "proxy supplement",
+      detail: "0 cursor-related api_calls (optional)",
+      severity: "warning",
+    },
+  ],
   suggestion: "ready",
 } satisfies DoctorPayload;
 

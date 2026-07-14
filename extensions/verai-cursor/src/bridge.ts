@@ -3,6 +3,33 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
+type CommandOptions = {
+  maxBuffer: number;
+  timeout: number;
+};
+
+export type CommandRunner = (
+  executable: string,
+  args: string[],
+  options: CommandOptions
+) => Promise<{ stdout: string }>;
+
+export type BridgeFailureKind =
+  | "not-found"
+  | "timeout"
+  | "invalid-json"
+  | "command-failed";
+
+export class AiVerifyBridgeError extends Error {
+  constructor(
+    readonly kind: BridgeFailureKind,
+    message: string
+  ) {
+    super(message);
+    this.name = "AiVerifyBridgeError";
+  }
+}
+
 export type DoctorPayload = {
   ok: boolean;
   checks: Array<{ name: string; ok: boolean; detail: string }>;
@@ -42,7 +69,14 @@ export type TaskReportPayload = {
 };
 
 export class AiVerifyBridge {
-  constructor(private readonly getCliPath: () => string) {}
+  constructor(
+    private readonly getCliPath: () => string,
+    private readonly runCommand: CommandRunner = execFileAsync as CommandRunner
+  ) {}
+
+  async importRecent(since = "1d"): Promise<void> {
+    await this.run(["cursor", "import", "--since", since]);
+  }
 
   async doctor(): Promise<DoctorPayload> {
     return this.runJson<DoctorPayload>(["cursor", "doctor", "--json"]);
@@ -69,22 +103,48 @@ export class AiVerifyBridge {
   }
 
   private async runJson<T>(args: string[]): Promise<T> {
+    const stdout = await this.run(args);
+    try {
+      return JSON.parse(stdout) as T;
+    } catch {
+      throw new AiVerifyBridgeError(
+        "invalid-json",
+        `ai-verify ${args.join(" ")} returned invalid JSON`
+      );
+    }
+  }
+
+  private async run(args: string[]): Promise<string> {
     const cli = this.getCliPath();
     try {
-      const { stdout } = await execFileAsync(cli, args, {
+      const { stdout } = await this.runCommand(cli, args, {
         maxBuffer: 8 * 1024 * 1024,
         timeout: 60_000,
       });
-      return JSON.parse(stdout) as T;
+      return stdout;
     } catch (err: unknown) {
-      const e = err as { code?: string; stderr?: string; message?: string };
+      const e = err as {
+        code?: string | number | null;
+        killed?: boolean;
+        signal?: string | null;
+      };
       if (e.code === "ENOENT") {
-        throw new Error(
+        throw new AiVerifyBridgeError(
+          "not-found",
           `ai-verify CLI not found at "${cli}". Set setting verai.aiVerifyPath or install with pip install -e .`
         );
       }
-      const detail = (e.stderr || e.message || String(err)).trim();
-      throw new Error(`ai-verify ${args.join(" ")} failed: ${detail}`);
+      if (e.killed || e.signal === "SIGTERM" || e.code === "ETIMEDOUT") {
+        throw new AiVerifyBridgeError(
+          "timeout",
+          `ai-verify ${args.join(" ")} timed out after 60 seconds`
+        );
+      }
+      const exitCode = typeof e.code === "number" ? ` (exit ${e.code})` : "";
+      throw new AiVerifyBridgeError(
+        "command-failed",
+        `ai-verify ${args.join(" ")} failed${exitCode}`
+      );
     }
   }
 }

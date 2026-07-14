@@ -4,6 +4,12 @@
   "description": "See factual vs inferred model shares for the current Cursor session (local-only).",
   "version": "0.1.0",
   "publisher": "verai",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/black-pupil153/VerAI.git",
+    "directory": "extensions/verai-cursor"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -78,6 +84,7 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "test": "npm run compile && tsc -p tsconfig.contracts.json && node --test test/*.test.js",
     "watch": "tsc -watch -p ./",
     "package": "vsce package --no-dependencies"
   },

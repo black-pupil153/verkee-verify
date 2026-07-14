@@ -7,6 +7,7 @@
   --border: var(--vscode-widget-border, rgba(127, 127, 127, 0.35));
   --ok: var(--vscode-testing-iconPassed, #3ba55d);
   --bad: var(--vscode-testing-iconFailed, #f23f42);
+  --warning: var(--vscode-notificationsWarningIcon-foreground, #cca700);
   --bar: var(--vscode-progressBar-background, #3794ff);
 }
 
@@ -48,6 +49,15 @@ h3 {
 
 .disclaimer {
   font-size: 11px;
+}
+
+.notice {
+  color: var(--warning);
+  margin: 4px 0 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--warning);
+  border-radius: 2px;
+  line-height: 1.4;
 }
 
 button#refresh {

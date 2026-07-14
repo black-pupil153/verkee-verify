@@ -2,6 +2,7 @@ const vscode = acquireVsCodeApi();
 
 const el = {
   status: document.getElementById("status"),
+  notice: document.getElementById("notice"),
   doctor: document.getElementById("doctor"),
   tasks: document.getElementById("tasks"),
   report: document.getElementById("report"),
@@ -15,6 +16,12 @@ el.refresh.addEventListener("click", () => {
 
 window.addEventListener("message", (event) => {
   const msg = event.data || {};
+  if (msg.type === "notice") {
+    el.notice.innerHTML = msg.message
+      ? `<p class="notice">${escapeHtml(msg.message)}</p>`
+      : "";
+    return;
+  }
   if (msg.type === "error") {
     el.status.textContent = msg.message || "Error";
     el.doctor.innerHTML = msg.fix
@@ -48,7 +55,7 @@ function renderDoctor(data) {
 function renderTasks(data) {
   const tasks = (data && data.tasks) || [];
   if (!tasks.length) {
-    el.tasks.innerHTML = `<p class="muted">No tasks. Run <code>ai-verify cursor import --since 7d</code>.</p>`;
+    el.tasks.innerHTML = `<p class="muted">No recent sessions found. VerAI already tried a background import; use <code>ai-verify cursor import --since 7d</code> to scan a wider window.</p>`;
     return;
   }
   el.tasks.innerHTML = `

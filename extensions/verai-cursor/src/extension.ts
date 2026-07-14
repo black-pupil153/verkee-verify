@@ -1,5 +1,11 @@
 import * as vscode from "vscode";
-import { AiVerifyBridge, DoctorPayload, TaskListPayload, TaskReportPayload } from "./bridge";
+import {
+  AiVerifyBridge,
+  AiVerifyBridgeError,
+  DoctorPayload,
+  TaskListPayload,
+  TaskReportPayload,
+} from "./bridge";
 
 export function activate(context: vscode.ExtensionContext): void {
   const bridge = new AiVerifyBridge(() =>
@@ -55,6 +61,18 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
     const limit = vscode.workspace
       .getConfiguration("verai")
       .get<number>("tasksLimit", 15);
+
+    this._post({ type: "notice", message: null });
+    try {
+      await this._bridge.importRecent("1d");
+    } catch {
+      this._post({
+        type: "notice",
+        message:
+          "Could not import recent Cursor data. Showing cached data; run `ai-verify cursor import --since 1d` in a terminal for details.",
+      });
+    }
+
     try {
       const doctor = await this._bridge.doctor();
       const tasks = await this._bridge.tasks(limit);
@@ -66,11 +84,7 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
         this._post({ type: "task", data: null });
       }
     } catch (err) {
-      this._post({
-        type: "error",
-        message: err instanceof Error ? err.message : String(err),
-        fix: "Install CLI: pip install -e .  then ensure `ai-verify` is on PATH (or set verai.aiVerifyPath).",
-      });
+      this._postError(err);
     }
   }
 
@@ -79,10 +93,7 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
       const report = await this._bridge.taskLatest();
       this._post({ type: "task", data: report });
     } catch (err) {
-      this._post({
-        type: "error",
-        message: err instanceof Error ? err.message : String(err),
-      });
+      this._postError(err);
     }
   }
 
@@ -91,11 +102,31 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
       const report = await this._bridge.task(taskId);
       this._post({ type: "task", data: report });
     } catch (err) {
-      this._post({
-        type: "error",
-        message: err instanceof Error ? err.message : String(err),
-      });
+      this._postError(err);
     }
+  }
+
+  private _postError(err: unknown): void {
+    if (err instanceof AiVerifyBridgeError) {
+      const fixes: Record<AiVerifyBridgeError["kind"], string> = {
+        "not-found":
+          "Install the CLI, ensure `ai-verify` is on PATH, or set `verai.aiVerifyPath` to its absolute path.",
+        timeout:
+          "Try Refresh again. If it still times out, run `ai-verify cursor doctor` in a terminal.",
+        "invalid-json":
+          "Update the ai-verify CLI so its JSON contract matches this extension, then try Refresh again.",
+        "command-failed":
+          "Run `ai-verify cursor doctor` in a terminal for safe diagnostic details.",
+      };
+      this._post({ type: "error", message: err.message, fix: fixes[err.kind] });
+      return;
+    }
+
+    this._post({
+      type: "error",
+      message: "VerAI could not load session data.",
+      fix: "Run `ai-verify cursor doctor` in a terminal, then try Refresh again.",
+    });
   }
 
   private _post(payload: Record<string, unknown>): void {
@@ -127,6 +158,7 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
     <button id="refresh" type="button">Refresh</button>
   </header>
   <section id="status" class="muted">Loading…</section>
+  <section id="notice"></section>
   <section id="doctor"></section>
   <section id="tasks"></section>
   <section id="report"></section>

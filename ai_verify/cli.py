@@ -1056,6 +1056,101 @@ def blindtest_build_corpus(since: Optional[str], include_unlabeled: bool):
         )
 
 
+@blindtest.command("inventory")
+@click.option(
+    "--split",
+    "split_name",
+    default=None,
+    help="对照已有 split 报告 test 覆盖与 n_test（如 cheap-gt-v2）",
+)
+@click.option("--long-min", default=5, show_default=True, type=int, help="长会话最少 turns")
+@click.option(
+    "--targets",
+    default="composer-2.5-fast,gpt-5.6-sol-medium,gpt-5.6-terra-medium",
+    show_default=True,
+    help="优先扩量模型列表（逗号分隔）",
+)
+@click.option("--json", "as_json", is_flag=True, help="输出机器可读 JSON")
+def blindtest_inventory(split_name: Optional[str], long_min: int, targets: str, as_json: bool):
+    """盘点语料样本量与 APP-12 扩量缺口（不读正文）"""
+    from ai_verify.blindtest.corpus import load_corpus
+    from ai_verify.blindtest.inventory import build_inventory
+
+    try:
+        corpus = load_corpus()
+    except FileNotFoundError:
+        console.print("[red]✗ 未找到语料，请先运行 ai-verify blindtest build-corpus[/red]")
+        raise SystemExit(1)
+
+    split = None
+    if split_name:
+        from ai_verify.blindtest.splits import load_split
+
+        try:
+            split = load_split(split_name)
+        except FileNotFoundError:
+            console.print(f"[red]✗ 未找到 split [{split_name}][/red]")
+            raise SystemExit(1)
+
+    target_list = [t.strip() for t in targets.split(",") if t.strip()]
+    report = build_inventory(
+        corpus,
+        split=split,
+        expand_targets=target_list,
+        long_min_turns=long_min,
+    )
+    if as_json:
+        _emit_json(report.to_dict())
+        return
+
+    title = "Blindtest inventory"
+    if split_name:
+        title += f" · split={split_name}"
+    console.print(f"[bold]{title}[/bold]")
+    console.print(
+        f"samples={report.n_samples}  conversations={report.n_conversations}  "
+        f"labeled={report.n_labeled}  long≥{long_min} turns"
+    )
+    if split_name:
+        console.print(f"n_test={report.n_test}  target≥{report.target_n_test}")
+
+    table = Table()
+    table.add_column("模型", style="cyan")
+    table.add_column("样本", justify="right")
+    table.add_column("会话", justify="right")
+    table.add_column(f"长会话(≥{long_min})", justify="right")
+    if split_name:
+        table.add_column("test样本", justify="right")
+        table.add_column("test会话", justify="right")
+    for c in report.classes:
+        row = [
+            c.label,
+            str(c.samples),
+            str(c.conversations),
+            str(c.long_conversations),
+        ]
+        if split_name:
+            row.extend([str(c.test_samples), str(c.test_conversations)])
+        table.add_row(*row)
+    console.print(table)
+
+    if report.label_sources:
+        src = " | ".join(f"{k}: {v}" for k, v in sorted(report.label_sources.items()))
+        console.print(f"[dim]标签来源: {src}[/dim]")
+
+    if report.gaps:
+        console.print("\n[yellow]Gaps vs APP-12 targets:[/yellow]")
+        for gap in report.gaps:
+            console.print(f"  • {gap}")
+        console.print(
+            "\n[dim]采集：关 Auto、固定 picker=M，每模型新开 ≥5 真实长会话"
+            "（每会话 ≥5 turns），再 import + build-corpus；"
+            "新建 split（勿覆盖 cheap-gt-v2）。[/dim]"
+        )
+    else:
+        console.print("\n[green]✓ 已满足配置的扩量目标[/green]")
+
+
 @blindtest.command("split")
 @click.option("--name", default="default", show_default=True, help="split registry 名称")
 @click.option("--seed", default=42, show_default=True, type=int, help="可复现随机种子")

@@ -205,7 +205,9 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 3. ~~**A1** `cursor doctor|tasks|task --json`~~（已完成）
 4. ~~**A2** `extensions/verai-cursor` 骨架~~（已落仓；待 `npm i && compile && vsce package` dogfood）
 5. **A3**：面板会话选择器 / 占比条与 CLI 对账；静默 import
-6. **B2**：每便宜类再补真实长会话（非模板）；目标 n_test ≥30
+6. **B2 / APP-12**：每便宜类再补真实长会话（非模板）；目标 n_test ≥30  
+   - 2026-07-14 盘点：`import --since 7d --full` + `build-corpus` → **86** 标签样本；composer/sol/terra 仍各 10 短会话（0 条 ≥5-turn）；`cheap-gt-v2` **n_test=14**。  
+   - 新增 `ai-verify blindtest inventory [--split cheap-gt-v2]` 对照缺口；阻断项是手选模型长会话采集，不是流水线。
 7. **C**：Dogfood → 5 人 alpha → VSIX 软发布（见 ROADMAP Track C）
 8. **Phase 3**（平台期后且用户要求）：sentence-transformers / 微调
 9. **可选**：周期探针先验（D/F）、ITT（E）、proxy merge — 仅用户点名时做

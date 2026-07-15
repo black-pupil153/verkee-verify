@@ -247,18 +247,18 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 
 ## 下一阶段建议
 
-优先按 [`docs/ROADMAP.md`](ROADMAP.md)（插件 1A + 并行 2B）推进：
+**唯一主线：A3 侧边栏 dogfood → 与 CLI 对账 → 可装 VSIX。**  
+B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再做。
 
-1. ~~本机真实 Cursor 数据 E2E~~ … ~~GT 10-scenario / cheap-gt-v2~~（见上文已完成清单）
-2. ~~**B1** cheap-gt-v2 通道消融~~（已完成：text 主力，+latency 最高）
-3. ~~**A1** `cursor doctor|tasks|task --json`~~（已完成）
-4. ~~**A2** `extensions/verai-cursor` 骨架~~（已落仓；待 `npm i && compile && vsce package` dogfood）
-5. **A3**：面板会话选择器 / 占比条与 CLI 对账；静默 import
-6. ~~**B2 / APP-12**~~：`cheap-gt-v3` 已达标；~~**B3**~~ 近亲门控 MVP 已落地
-7. **C / A3**：扩展 dogfood（会话选择器 / 占比条）→ 5 人 alpha → VSIX 软发布
-8. **B4**：`eval-auto` 扩量；面板与 CLI 对齐
-9. **Phase 3**（平台期后且用户要求）：sentence-transformers / 微调
-10. **可选**：duration 覆盖修复、周期探针先验（D/F）、ITT（E）、proxy merge — 仅用户点名时做
+已完成（勿重做）：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2/v3、B1–B3、CLI `--json`、扩展骨架。
+
+本会话执行清单（A3）：
+
+1. `extensions/verai-cursor`：`npm i && npm run compile`（必要时 `vsce package`）
+2. 面板：会话选择器（最近 N / latest）+ 事实/推断占比条/表 + coverage 一行
+3. 静默 `cursor import --since 1d`（刷新）；doctor 失败给 PATH/`verai.aiVerifyPath` 修复步骤
+4. 验收：侧边栏打开 → 选最近会话 → 10 秒内占比与 `ai-verify cursor task --json` 一致
+5. 结果写回 `PROJECT_STATUS`；能 dogfood 则标 A3 进度
 
 ## 安全边界
 
@@ -271,10 +271,16 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 ## 下一会话开场提示
 
 ```text
-先读 docs/ROADMAP.md、docs/PROJECT_STATUS.md、docs/research/EXPERIMENT_PROTOCOL.md。
-不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2 盲评与消融、CLI --json、扩展骨架、D/F/ITT（除非用户点名）。
-产品判断：最根本能力是模型盲测；产品化主路径是侧边栏会话占比（事实/推断分轨）。
-下一优先：扩展 dogfood / A3 面板 / B4 eval-auto；微调后置。`cheap-gt-v3` + B3 近亲门控已落地。
-回归：venv/bin/python -m pytest -q tests -k "not ml_optional"。
+执行 A3 侧边栏 dogfood（产品化主线）。先读 docs/ROADMAP.md（A3/A4）、docs/PROJECT_STATUS.md、extensions/verai-cursor/README.md。
+
+不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT、B1–B3 近亲门控、CLI --json、扩展骨架、D/F/ITT/微调（除非点名）。
+分支：leo24yuyu/app-12-扩充真实长会话-gt-至-n_test-30（含 APP-12 + B3；可继续其上或新开 a3 分支）。
+
+本会话只做：
+1) extensions/verai-cursor 编译/打包；会话选择器 + 事实/推断占比 + coverage
+2) 接静默 import --since 1d；doctor 失败可修复
+3) 验收：侧边栏数字 ≡ ai-verify cursor task --json（10 秒内）
+4) 写回 PROJECT_STATUS；回归 venv/bin/python -m pytest -q tests -k "not ml_optional"
+
 保持 factual vs inferred 分轨与隐私边界。
 ```

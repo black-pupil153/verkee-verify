@@ -189,3 +189,107 @@ def test_calibration_probability_range():
     assert probs == sorted(probs, reverse=True)
     assert abs(sum(probs) - 1.0) < 1e-3
     assert all(0.0 <= p <= 1.0 for p in probs)
+
+
+def test_near_pair_gate_abstains_on_small_margin():
+    from ai_verify.blindtest.classifier import (
+        ABSTAIN_NEAR_MARGIN,
+        ABSTAIN_THRESHOLD,
+        near_pair_margin_too_small,
+        near_pair_swap_stats,
+        select_inferred_model,
+    )
+
+    sol = "gpt-5.6-sol-medium"
+    terra = "gpt-5.6-terra-medium"
+    ranked_close = [(sol, 0.42), (terra, 0.40), ("grok-4.5", 0.18)]
+    ranked_wide = [(sol, 0.55), (terra, 0.30), ("grok-4.5", 0.15)]
+
+    assert near_pair_margin_too_small(ranked_close, near_margin=0.12)
+    assert not near_pair_margin_too_small(ranked_wide, near_margin=0.12)
+
+    inferred, reason = select_inferred_model(
+        ranked_close, threshold=0.3, near_margin=0.12
+    )
+    assert inferred is None
+    assert reason == ABSTAIN_NEAR_MARGIN
+
+    inferred2, reason2 = select_inferred_model(
+        ranked_wide, threshold=0.3, near_margin=0.12
+    )
+    assert inferred2 == sol
+    assert reason2 is None
+
+    # 大 margin 但低于 τ → threshold 弃权
+    inferred3, reason3 = select_inferred_model(
+        ranked_wide, threshold=0.7, near_margin=0.12
+    )
+    assert inferred3 is None
+    assert reason3 == ABSTAIN_THRESHOLD
+
+    # forced 忽略门控
+    forced, fr = select_inferred_model(
+        ranked_close, threshold=0.7, near_margin=0.12, forced=True
+    )
+    assert forced == sol and fr is None
+
+    stats = near_pair_swap_stats(
+        [sol, terra, sol, "grok-4.5"],
+        [terra, terra, sol, "grok-4.5"],
+    )
+    assert stats["near_pair_n"] == 3
+    assert stats["near_pair_swaps"] == 1
+    assert abs(stats["near_pair_swap_rate"] - 1 / 3) < 1e-9
+
+    # composer 同时属于多对：→terra 仍算近亲 swap
+    composer = "composer-2.5-fast"
+    multi = near_pair_swap_stats([composer, composer], [sol, terra])
+    assert multi["near_pair_n"] == 2
+    assert multi["near_pair_swaps"] == 2
+
+
+def test_predict_turn_near_gate_and_persist(tmp_path):
+    from ai_verify.blindtest.classifier import ABSTAIN_NEAR_MARGIN
+
+    samples = _build_synthetic_corpus()
+    # 把合成类名映射成近亲对，便于门控命中
+    for s in samples:
+        s.label = (
+            "gpt-5.6-sol-medium"
+            if s.label == "model-alpha"
+            else "gpt-5.6-terra-medium"
+        )
+    clf = BlindModelClassifier(threshold=0.01, near_margin=0.12)
+    clf.train(samples)
+
+    # 人为构造接近的 top2：直接改 _predict_proba
+    orig = clf._predict_proba
+
+    def close_probs(_vec):
+        # classes order after train is sorted
+        out = [0.0] * len(clf.classes)
+        i_sol = clf.classes.index("gpt-5.6-sol-medium")
+        i_terra = clf.classes.index("gpt-5.6-terra-medium")
+        out[i_sol] = 0.41
+        out[i_terra] = 0.39
+        # leftover on any remaining class
+        for i in range(len(out)):
+            if out[i] == 0.0:
+                out[i] = 0.20 / max(1, len(out) - 2)
+                break
+        return out
+
+    clf._predict_proba = close_probs  # type: ignore[method-assign]
+    rng = random.Random(1)
+    res = clf.predict_turn(extract_features(_make_turn_a(rng, "x", 0)))
+    assert res.inferred_model is None
+    assert res.abstain_reason == ABSTAIN_NEAR_MARGIN
+    assert res.probability == 0.41
+
+    clf._predict_proba = orig  # type: ignore[method-assign]
+    path = tmp_path / "model.json"
+    clf.near_margin = 0.15
+    clf.save(path)
+    loaded = BlindModelClassifier.load(path)
+    assert loaded.near_margin == 0.15
+

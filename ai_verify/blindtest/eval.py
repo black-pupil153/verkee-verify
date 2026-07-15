@@ -14,9 +14,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ai_verify.blindtest.classifier import (
+    ABSTAIN_NEAR_MARGIN,
     BlindModelClassifier,
     TrainReport,
+    near_pair_swap_stats,
     report_as_dict,
+    select_inferred_model,
 )
 from ai_verify.blindtest.corpus import DEFAULT_BLINDTEST_DIR, Corpus, CorpusSample
 from ai_verify.blindtest.splits import SealedLabel
@@ -45,10 +48,12 @@ class EvalReport:
     split_name: Optional[str] = None
     model_path: Optional[str] = None
     notes: List[str] = field(default_factory=list)
-
-
-def _top1(probs: Sequence[Tuple[str, float]]) -> Tuple[str, float]:
-    return max(probs, key=lambda x: x[1])
+    near_pair_n: int = 0
+    near_pair_swaps: int = 0
+    near_pair_swap_rate: Optional[float] = None
+    near_pair_abstain: int = 0
+    near_pair_abstain_rate: Optional[float] = None
+    near_margin: Optional[float] = None
 
 
 def _predict_distribution(
@@ -144,6 +149,8 @@ def evaluate_predictions(
     mode: str = "selective",
     threshold: Optional[float] = None,
     conversation_ids: Optional[Sequence[str]] = None,
+    near_pair_abstain: int = 0,
+    near_margin: Optional[float] = None,
 ) -> EvalReport:
     if classes is None:
         classes = sorted(set(y_true) | {p for p in predictions if p})
@@ -180,7 +187,20 @@ def evaluate_predictions(
         macro_f1, per_f1 = None, {}
         ece, brier = None, None
 
+    # Forced：对全部真标签用 top1 算近亲 swap；selective：只在保留预测上算
+    swap_preds: Sequence[Optional[str]]
+    if mode == "forced":
+        swap_preds = [
+            max(pr.items(), key=lambda x: x[1])[0] if pr else None for pr in prob_rows
+        ]
+        swap_true = y_true
+    else:
+        swap_preds = kept_pred
+        swap_true = kept_true
+    near = near_pair_swap_stats(swap_true, swap_preds)
+
     n_convs = len(set(conversation_ids)) if conversation_ids else 0
+    near_abstain_rate = (near_pair_abstain / n) if n else None
     return EvalReport(
         mode=mode,
         n_samples=n,
@@ -196,6 +216,12 @@ def evaluate_predictions(
         ece=ece,
         brier=brier,
         evaluated_at=datetime.now().isoformat(),
+        near_pair_n=int(near["near_pair_n"]),
+        near_pair_swaps=int(near["near_pair_swaps"]),
+        near_pair_swap_rate=near["near_pair_swap_rate"],
+        near_pair_abstain=near_pair_abstain if mode == "selective" else 0,
+        near_pair_abstain_rate=near_abstain_rate if mode == "selective" else None,
+        near_margin=near_margin,
     )
 
 
@@ -213,11 +239,14 @@ def evaluate_classifier(
 ) -> EvalReport:
     """对带标签样本（或密封标签）评估。"""
     threshold = tau if tau is not None else clf.threshold
+    near_margin = getattr(clf, "near_margin", None)
     y_true: List[str] = []
     preds: List[Optional[str]] = []
     confs: List[float] = []
     prob_rows: List[Dict[str, float]] = []
     conv_ids: List[str] = []
+    ranked_rows: List[List[Tuple[str, float]]] = []
+    near_abstain = 0
 
     for s in samples:
         label = s.label
@@ -229,15 +258,22 @@ def evaluate_classifier(
         if label is None:
             continue
         dist = _predict_distribution(clf, s.features)
-        top_model, top_prob = _top1(dist)
+        ranked = sorted(dist, key=lambda x: -x[1])
+        top_prob = ranked[0][1]
         y_true.append(label)
         confs.append(top_prob)
         prob_rows.append({m: p for m, p in dist})
+        ranked_rows.append(ranked)
         conv_ids.append(s.conversation_id)
-        if forced:
-            preds.append(top_model)
-        else:
-            preds.append(top_model if top_prob >= threshold else None)
+        inferred, reason = select_inferred_model(
+            ranked,
+            threshold=threshold,
+            near_margin=clf.near_margin,
+            forced=forced,
+        )
+        preds.append(inferred)
+        if not forced and reason == ABSTAIN_NEAR_MARGIN:
+            near_abstain += 1
 
     classes = sorted(set(y_true) | set(clf.classes))
     report = evaluate_predictions(
@@ -249,15 +285,27 @@ def evaluate_classifier(
         mode="forced" if forced else "selective",
         threshold=None if forced else threshold,
         conversation_ids=conv_ids,
+        near_pair_abstain=near_abstain,
+        near_margin=near_margin,
     )
     report.split_name = split_name
     report.model_path = model_path
 
     if sweep and not forced:
-        top_models = [_top1(list(pr.items()))[0] for pr in prob_rows]
         sweep_rows: List[Dict[str, Any]] = []
         for t in sweep_taus:
-            sel_preds = [m if c >= t else None for m, c in zip(top_models, confs)]
+            sel_preds: List[Optional[str]] = []
+            sweep_near_abstain = 0
+            for ranked in ranked_rows:
+                inferred, reason = select_inferred_model(
+                    ranked,
+                    threshold=t,
+                    near_margin=clf.near_margin,
+                    forced=False,
+                )
+                sel_preds.append(inferred)
+                if reason == ABSTAIN_NEAR_MARGIN:
+                    sweep_near_abstain += 1
             sub = evaluate_predictions(
                 y_true,
                 sel_preds,
@@ -267,6 +315,8 @@ def evaluate_classifier(
                 mode="selective",
                 threshold=t,
                 conversation_ids=conv_ids,
+                near_pair_abstain=sweep_near_abstain,
+                near_margin=near_margin,
             )
             sweep_rows.append(
                 {
@@ -277,6 +327,9 @@ def evaluate_classifier(
                     "macro_f1": sub.macro_f1,
                     "ece": sub.ece,
                     "brier": sub.brier,
+                    "near_pair_swap_rate": sub.near_pair_swap_rate,
+                    "near_pair_abstain": sub.near_pair_abstain,
+                    "near_pair_abstain_rate": sub.near_pair_abstain_rate,
                 }
             )
         report.tau_sweep = sweep_rows

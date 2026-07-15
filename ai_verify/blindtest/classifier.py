@@ -8,6 +8,7 @@
 - 校准：leave-one-conversation-out 留出预测上拟合温度缩放（Platt 式），
   避免 CalibratedClassifierCV 在小语料上折内类别塌缩
 - 概率低于阈值（默认 0.7）时输出 inferred_model=None
+- 近亲门控（B3）：top2 落在配置近亲对且 margin 过小时弃权
 """
 
 from __future__ import annotations
@@ -23,14 +24,88 @@ from ai_verify.blindtest.features import TurnRecord, extract_features
 
 MODEL_FORMAT_VERSION = 1
 DEFAULT_THRESHOLD = 0.7
+DEFAULT_NEAR_MARGIN = 0.12
+
+# 近亲 / 邻域对：top2 落在任一对且 margin 过小时弃权（B3 MVP）
+NEAR_RELATIVE_PAIRS: Tuple[frozenset, ...] = (
+    frozenset({"gpt-5.6-sol-medium", "gpt-5.6-terra-medium"}),
+    frozenset({"composer-2.5-fast", "gpt-5.6-sol-medium"}),
+    frozenset({"composer-2.5-fast", "gpt-5.6-terra-medium"}),
+    frozenset({"claude-fable-5", "composer-2.5-fast"}),
+)
+
+ABSTAIN_NEAR_MARGIN = "near_margin"
+ABSTAIN_THRESHOLD = "threshold"
 
 
 @dataclass
 class InferenceResult:
-    inferred_model: Optional[str]  # 低于阈值时为 None
+    inferred_model: Optional[str]  # 低于阈值 / 近亲门控时为 None
     probability: float
     top_candidates: List[Tuple[str, float]]
     features_used: int
+    abstain_reason: Optional[str] = None  # near_margin | threshold | None
+
+
+def near_pair_margin_too_small(
+    ranked: Sequence[Tuple[str, float]],
+    *,
+    near_margin: float = DEFAULT_NEAR_MARGIN,
+    pairs: Sequence[frozenset] = NEAR_RELATIVE_PAIRS,
+) -> bool:
+    """True when top-2 form a configured near pair and |p1-p2| < near_margin."""
+    if len(ranked) < 2 or near_margin <= 0:
+        return False
+    (m1, p1), (m2, p2) = ranked[0], ranked[1]
+    if (p1 - p2) >= near_margin:
+        return False
+    top2 = frozenset({m1, m2})
+    return any(top2 == pair for pair in pairs)
+
+
+def select_inferred_model(
+    ranked: Sequence[Tuple[str, float]],
+    *,
+    threshold: float = DEFAULT_THRESHOLD,
+    near_margin: float = DEFAULT_NEAR_MARGIN,
+    pairs: Sequence[frozenset] = NEAR_RELATIVE_PAIRS,
+    forced: bool = False,
+) -> Tuple[Optional[str], Optional[str]]:
+    """返回 (inferred_model, abstain_reason)。forced 时始终返回 top1。"""
+    if not ranked:
+        return None, ABSTAIN_THRESHOLD
+    top_model, top_prob = ranked[0]
+    if forced:
+        return top_model, None
+    if near_pair_margin_too_small(ranked, near_margin=near_margin, pairs=pairs):
+        return None, ABSTAIN_NEAR_MARGIN
+    if top_prob < threshold:
+        return None, ABSTAIN_THRESHOLD
+    return top_model, None
+
+
+def near_pair_swap_stats(
+    y_true: Sequence[str],
+    y_pred: Sequence[Optional[str]],
+    *,
+    pairs: Sequence[frozenset] = NEAR_RELATIVE_PAIRS,
+) -> Dict[str, Any]:
+    """近亲对内互换诊断：真标签落在任一对，且预测与真值同属某一对且预测≠真。"""
+    in_pair = 0
+    swaps = 0
+    for t, p in zip(y_true, y_pred):
+        if p is None:
+            continue
+        if not any(t in pair for pair in pairs):
+            continue
+        in_pair += 1
+        if t != p and any(t in pair and p in pair for pair in pairs):
+            swaps += 1
+    return {
+        "near_pair_n": in_pair,
+        "near_pair_swaps": swaps,
+        "near_pair_swap_rate": (swaps / in_pair) if in_pair else None,
+    }
 
 
 @dataclass
@@ -79,8 +154,13 @@ def _extract_samples(corpus: Any) -> List[Any]:
 class BlindModelClassifier:
     """features dict → 校准概率 → InferenceResult。"""
 
-    def __init__(self, threshold: float = DEFAULT_THRESHOLD):
+    def __init__(
+        self,
+        threshold: float = DEFAULT_THRESHOLD,
+        near_margin: float = DEFAULT_NEAR_MARGIN,
+    ):
         self.threshold = threshold
+        self.near_margin = near_margin
         self.classes: List[str] = []
         self.feature_names: List[str] = []
         self.means: List[float] = []
@@ -489,12 +569,18 @@ class BlindModelClassifier:
         vec = self._vectorize(turn_features)
         probs = self._predict_proba(vec)
         ranked = sorted(zip(self.classes, probs), key=lambda x: -x[1])
-        top_model, top_prob = ranked[0]
+        top_prob = ranked[0][1]
+        inferred, reason = select_inferred_model(
+            ranked,
+            threshold=self.threshold,
+            near_margin=self.near_margin,
+        )
         return InferenceResult(
-            inferred_model=top_model if top_prob >= self.threshold else None,
+            inferred_model=inferred,
             probability=top_prob,
             top_candidates=[(m, round(p, 4)) for m, p in ranked[:3]],
             features_used=features_used,
+            abstain_reason=reason,
         )
 
     # ------------------------------------------------------------- persist
@@ -506,6 +592,7 @@ class BlindModelClassifier:
             "format_version": MODEL_FORMAT_VERSION,
             "backend": self.backend,
             "threshold": self.threshold,
+            "near_margin": self.near_margin,
             "classes": self.classes,
             "feature_names": self.feature_names,
             "means": self.means,
@@ -522,7 +609,10 @@ class BlindModelClassifier:
     @classmethod
     def load(cls, path: Union[str, Path]) -> "BlindModelClassifier":
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
-        obj = cls(threshold=payload.get("threshold", DEFAULT_THRESHOLD))
+        obj = cls(
+            threshold=payload.get("threshold", DEFAULT_THRESHOLD),
+            near_margin=payload.get("near_margin", DEFAULT_NEAR_MARGIN),
+        )
         obj.backend = payload["backend"]
         obj.classes = payload["classes"]
         obj.feature_names = payload["feature_names"]

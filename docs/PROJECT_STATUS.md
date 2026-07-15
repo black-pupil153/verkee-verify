@@ -1,11 +1,11 @@
 # VerAI 项目阶段交接
 
-> 更新日期：2026-07-13  
+> 更新日期：2026-07-15  
 > 适用对象：继续本项目的下一会话 / 下一位开发者
 
 ## 一句话状态
 
-VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲评 + Cheap GT `cheap-gt-v2`（Acc@forced **78.6%** / Acc@τ=0.7 **90%**）已完成。产品化已开跑：**侧边栏扩展骨架** + **CLI `--json`** + **cheap-gt-v2 消融**（见 [`ROADMAP.md`](ROADMAP.md)）。微调后置。
+VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲评 + Cheap GT `cheap-gt-v3`（Acc@forced **53.1%** n=32）已完成。产品化已开跑：**侧边栏扩展骨架** + **CLI `--json`** + **B3 近亲门控 MVP**（见 [`ROADMAP.md`](ROADMAP.md)）。微调后置。
 
 ## 仓库与运行状态
 
@@ -89,6 +89,7 @@ ai-verify blindtest eval --split default --tau 0.7 --sweep
 | **Cheap GT + hook_task 对齐（2026-07-13）** | Task 子代理用 `hook.task`↔transcript 指纹对齐；语料曾 **53** 样本；split `cheap-gt`：**Acc@forced 87.5%**（n=16）、**Acc@τ=0.7 90%**（coverage 62.5%） |
 | **GT 10-scenario 扩量（2026-07-13）** | composer/gpt-sol/gpt-terra 各补满 **10** 会话（fable 不扩、存量进闭集；grok 已 ≥10）；语料 **78** 样本；split `cheap-gt-v2` 复测：见下节 |
 | **APP-12 长会话扩量（2026-07-15）** | 每便宜类 +5 真实 ≥5-turn 会话；语料 **163** 样本；split `cheap-gt-v3`：**n_test=32**；见下节 |
+| **B3 近亲门控 MVP（2026-07-15）** | 推理侧 near-pair margin 弃权 + eval 近亲指标；见下节 |
 
 ### 隐藏 test 盲评（2026-07-13，split=`default` seed=42）
 
@@ -185,6 +186,28 @@ Runs（复测）：`~/.ai-verify/blindtest/runs/20260713-203239/`（train）、`
 
 Runs：`~/.ai-verify/blindtest/runs/20260715-113407/`（train）、`…-1`（forced）、`…-2`（selective）。
 
+### B3 近亲门控 MVP（2026-07-15，split=`cheap-gt-v3`）
+
+实现（推理侧，不改标签空间 / 不重训）：
+
+- `NEAR_RELATIVE_PAIRS`：sol↔terra、composer↔sol、composer↔terra、fable↔composer
+- `near_margin=0.12`：top2 落在任一对且 `p1-p2 < margin` → `inferred_model=None`（`abstain_reason=near_margin`）
+- eval / CLI 报告 `near_pair_swap`（forced 诊断）与 `near_abstain`（selective）
+- 产品路径：`predict_turn` → Auto 推断轨自动更保守
+
+复评（runs `…/20260715-145746/` forced、`…-1` τ=0.5、`…-2` τ=0.7+sweep）：
+
+| 评估 | 指标 | 值 |
+|------|------|----|
+| **Acc@forced** | | **53.1%**（不变；门控不改 forced） |
+| near_pair_swap（forced） | | **61.1%**（11/18；composer→sol/terra + sol↔terra） |
+| **Acc@τ=0.7** | | **100%**（cov **6.2%**；near_abstain **25%**=8/32） |
+| Acc@τ=0.5 | | 70%（cov 31.2%；near_abstain 25%） |
+
+低 τ 对照（说明门控价值；默认产品 τ=0.7 时多与阈值重叠）：τ=0.3 有门控 Acc **60.9%** / cov 71.9% vs 无门控 Acc 53.3% / cov 93.8%——挡住约 4 条本会自信发出的近亲错报。
+
+读法：B3 MVP 优先**诚实弃权**而非涨 forced；sol↔terra 现有特征仍几乎不可分。后续靠侧边栏反馈再决定是否补特征 / 修 duration。
+
 ### cheap-gt-v2 通道消融 + Auto 弱验证（2026-07-13）
 
 `ablate --split cheap-gt-v2`（Acc@forced，n=14；runs `…/20260713-205144/`）：
@@ -231,10 +254,11 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 3. ~~**A1** `cursor doctor|tasks|task --json`~~（已完成）
 4. ~~**A2** `extensions/verai-cursor` 骨架~~（已落仓；待 `npm i && compile && vsce package` dogfood）
 5. **A3**：面板会话选择器 / 占比条与 CLI 对账；静默 import
-6. ~~**B2 / APP-12**~~：`cheap-gt-v3` 已达标（n_test=32；每便宜类 ≥5 长会话、test ≥3 会话）；下一步 **B3** 近亲混淆
-7. **C**：Dogfood → 5 人 alpha → VSIX 软发布（见 ROADMAP Track C）
-8. **Phase 3**（平台期后且用户要求）：sentence-transformers / 微调
-9. **可选**：周期探针先验（D/F）、ITT（E）、proxy merge — 仅用户点名时做
+6. ~~**B2 / APP-12**~~：`cheap-gt-v3` 已达标；~~**B3**~~ 近亲门控 MVP 已落地
+7. **C / A3**：扩展 dogfood（会话选择器 / 占比条）→ 5 人 alpha → VSIX 软发布
+8. **B4**：`eval-auto` 扩量；面板与 CLI 对齐
+9. **Phase 3**（平台期后且用户要求）：sentence-transformers / 微调
+10. **可选**：duration 覆盖修复、周期探针先验（D/F）、ITT（E）、proxy merge — 仅用户点名时做
 
 ## 安全边界
 
@@ -250,7 +274,7 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 先读 docs/ROADMAP.md、docs/PROJECT_STATUS.md、docs/research/EXPERIMENT_PROTOCOL.md。
 不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2 盲评与消融、CLI --json、扩展骨架、D/F/ITT（除非用户点名）。
 产品判断：最根本能力是模型盲测；产品化主路径是侧边栏会话占比（事实/推断分轨）。
-下一优先：扩展 dogfood / B3 近亲混淆；微调后置。`cheap-gt-v3` 已替代 v2 作为扩量后主 split。
+下一优先：扩展 dogfood / A3 面板 / B4 eval-auto；微调后置。`cheap-gt-v3` + B3 近亲门控已落地。
 回归：venv/bin/python -m pytest -q tests -k "not ml_optional"。
 保持 factual vs inferred 分轨与隐私边界。
 ```

@@ -1475,6 +1475,21 @@ def blindtest_eval(
     brier = f"{report.brier:.3f}" if report.brier is not None else "N/A"
     table.add_row("ECE", ece)
     table.add_row("Brier", brier)
+    if report.near_pair_swap_rate is not None:
+        table.add_row(
+            "near_pair_swap",
+            f"{report.near_pair_swap_rate:.1%} "
+            f"({report.near_pair_swaps}/{report.near_pair_n})",
+        )
+    elif report.near_pair_n:
+        table.add_row("near_pair_swap", f"0% (0/{report.near_pair_n})")
+    if not forced and report.near_pair_abstain_rate is not None:
+        table.add_row(
+            "near_abstain",
+            f"{report.near_pair_abstain_rate:.1%} "
+            f"({report.near_pair_abstain}/{report.n_samples}; "
+            f"margin={report.near_margin})",
+        )
     console.print(table)
 
     if report.confusion_matrix:

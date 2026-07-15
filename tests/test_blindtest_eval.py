@@ -325,3 +325,92 @@ def test_apply_channels_drops_latency():
     for s in filtered:
         assert not any(k.startswith("lat_") for k in s.features)
         assert s.features  # still has some features
+
+
+def test_near_gate_eval_matches_predict_and_swap_metric():
+    from ai_verify.blindtest.classifier import (
+        ABSTAIN_NEAR_MARGIN,
+        select_inferred_model,
+    )
+    from ai_verify.blindtest.eval import evaluate_predictions
+
+    sol = "gpt-5.6-sol-medium"
+    terra = "gpt-5.6-terra-medium"
+    composer = "composer-2.5-fast"
+
+    # 近亲接近 → 弃权；宽 margin → 保留
+    ranked_close = [(sol, 0.44), (terra, 0.40), (composer, 0.16)]
+    ranked_wide = [(composer, 0.70), (sol, 0.20), (terra, 0.10)]
+
+    y_true = [sol, terra, composer]
+    confs = [0.44, 0.40, 0.70]
+    prob_rows = [
+        {sol: 0.44, terra: 0.40, composer: 0.16},
+        {sol: 0.35, terra: 0.40, composer: 0.25},
+        {composer: 0.70, sol: 0.20, terra: 0.10},
+    ]
+    ranked_all = [
+        ranked_close,
+        [(terra, 0.40), (sol, 0.35), (composer, 0.25)],
+        ranked_wide,
+    ]
+    preds = []
+    near_abstain = 0
+    for ranked in ranked_all:
+        inferred, reason = select_inferred_model(
+            ranked, threshold=0.3, near_margin=0.12
+        )
+        preds.append(inferred)
+        if reason == ABSTAIN_NEAR_MARGIN:
+            near_abstain += 1
+        # 与 predict_turn 路径一致：同一 select_inferred_model
+        assert select_inferred_model(
+            ranked, threshold=0.3, near_margin=0.12
+        ) == (inferred, reason)
+
+    assert near_abstain == 2  # 前两条近亲接近
+    assert preds[2] == composer
+
+    report = evaluate_predictions(
+        y_true,
+        preds,
+        confs,
+        prob_rows,
+        classes=[composer, sol, terra],
+        mode="selective",
+        threshold=0.3,
+        near_pair_abstain=near_abstain,
+        near_margin=0.12,
+    )
+    assert report.abstained == 2
+    assert report.near_pair_abstain == 2
+    assert abs(report.near_pair_abstain_rate - 2 / 3) < 1e-9
+    # 仅保留 composer 预测；真=composer → 无 near-pair swap among kept
+    assert report.near_pair_swaps == 0
+
+    forced = evaluate_predictions(
+        y_true,
+        [sol, terra, composer],
+        confs,
+        prob_rows,
+        classes=[composer, sol, terra],
+        mode="forced",
+        near_margin=0.12,
+    )
+    # forced：sol↔terra 互换 1（真 sol 预测需看 top1 from probs: sol→sol 正确；
+    # 真 terra top1=terra 正确；真 composer→composer）。swap_rate 用 top1 of probs。
+    # row0 top1=sol (true sol ok), row1 top1=terra (true terra ok), row2 composer ok
+    assert forced.near_pair_swaps == 0
+
+    # 显式互换矩阵
+    forced_swap = evaluate_predictions(
+        [sol, terra],
+        [terra, sol],
+        [0.5, 0.5],
+        [{sol: 0.4, terra: 0.6}, {sol: 0.55, terra: 0.45}],
+        classes=[sol, terra],
+        mode="forced",
+    )
+    assert forced_swap.near_pair_n == 2
+    assert forced_swap.near_pair_swaps == 2
+    assert abs(forced_swap.near_pair_swap_rate - 1.0) < 1e-9

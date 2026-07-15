@@ -19,7 +19,7 @@
 
 - 单任务占比：`aggregate_task` → `factual_*` / `inferred_*` / `coverage` / `output_shares`
 - CLI：`cursor task` / `tasks` / `board` / `hooks`；已补 `doctor|tasks|task --json`
-- 盲评：`cheap-gt-v2` Acc@forced **78.6%**（n=14）；Acc@τ=0.7 **90%**（cov 71.4%）
+- 盲评：`cheap-gt-v3` Acc@forced **53.1%**（n=32）；`cheap-gt-v2` 曾 **78.6%**（n=14，短会话）
 - 通道消融（同 split）：见 `PROJECT_STATUS.md`；**+latency** 抬升明显
 
 ## 双轨总览
@@ -97,7 +97,7 @@ flowchart TB
 | 项 | 动作 | 成功标准 | 状态 |
 |----|------|----------|------|
 | B1 | `ablate` on `cheap-gt-v2` | 明确各通道贡献 | ✅（见 PROJECT_STATUS） |
-| B2 | 每便宜类再补 ≥5 真实长会话 | test 每类 ≥3 会话；n_test ≥30 | 待做 |
+| B2 | 每便宜类再补 ≥5 真实长会话 | test 每类 ≥3 会话；n_test ≥30 | ✅ `cheap-gt-v3`（见 PROJECT_STATUS） |
 | B3 | 专治 sol↔terra / fable→composer | 近亲混淆下降 | 待做 |
 | B4 | `eval-auto` 扩量；面板与 CLI 对齐 | 指标写回 PROJECT_STATUS | 部分（limit=20 已记） |
 | B5 | 对外只报 forced/selective + n | 勿混 LOCO-CV | 纪律已立 |

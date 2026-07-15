@@ -29,6 +29,8 @@ from ai_verify.cursor_logs import iter_log_events
 
 DEFAULT_BLINDTEST_DIR = Path.home() / ".ai-verify" / "blindtest"
 CORPUS_FILENAME = "corpus.json"
+# conversation_id -> model_id；用于 Task 并行采集时 fingerprint 碰撞的权威纠偏
+CONVERSATION_MODEL_OVERRIDES_FILENAME = "conversation_model_overrides.json"
 
 _MONTHS = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
@@ -269,9 +271,25 @@ class LabelIndex:
         self.durations: Dict[str, float] = {}  # request_id -> duration_ms（含 Auto）
         # Task 子代理：hook.task 指纹 -> 规范化模型（对齐 /subagents/<uuid>.jsonl）
         self.task_models: Dict[str, str] = {}
+        # 同指纹对应多个模型时不再自动打标（避免并行同 prompt 误标）
+        self.task_models_ambiguous: set = set()
+        # conversation_id -> model（可选 overrides 文件）
+        self.conversation_overrides: Dict[str, str] = {}
 
     def add_event(self, ev: RequestEvent) -> None:
         self.by_conversation.setdefault(ev.conversation_id, []).append(ev)
+
+    def set_task_model(self, fingerprint: str, model: str) -> None:
+        """写入 task 指纹映射；冲突则标记 ambiguous 并移除。"""
+        if fingerprint in self.task_models_ambiguous:
+            return
+        prev = self.task_models.get(fingerprint)
+        if prev is None:
+            self.task_models[fingerprint] = model
+            return
+        if prev != model:
+            self.task_models_ambiguous.add(fingerprint)
+            self.task_models.pop(fingerprint, None)
 
     def finalize(self) -> None:
         for events in self.by_conversation.values():
@@ -367,7 +385,7 @@ def build_label_index(
                 if hev.task and mid:
                     fp = task_fingerprint(hev.task)
                     if fp:
-                        index.task_models[fp] = mid
+                        index.set_task_model(fp, mid)
                 if not mid:
                     continue
                 if rid:
@@ -523,6 +541,44 @@ def label_turns(turns: List[TurnRecord], index: LabelIndex) -> None:
             turn.label_source = "conversation_uniform"
 
 
+def load_conversation_model_overrides(
+    blindtest_dir: Optional[Path] = None,
+) -> Dict[str, str]:
+    """读取 conversation_id -> model_id 覆盖表（不存在则空）。"""
+    path = (blindtest_dir or DEFAULT_BLINDTEST_DIR) / CONVERSATION_MODEL_OVERRIDES_FILENAME
+    if not path.is_file():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, str] = {}
+    for cid, model in raw.items():
+        if not isinstance(cid, str) or not isinstance(model, str):
+            continue
+        mid = normalize_model_slug(model)
+        if mid:
+            out[cid] = mid
+    return out
+
+
+def apply_conversation_overrides(
+    turns: List[TurnRecord], overrides: Dict[str, str]
+) -> None:
+    """按 conversation_id 覆盖标签（权威纠偏；优先于 hook_task 指纹）。"""
+    if not turns or not overrides:
+        return
+    cid = turns[0].conversation_id
+    model = overrides.get(cid)
+    if not model:
+        return
+    for turn in turns:
+        turn.label = model
+        turn.label_source = "launch_override"
+
+
 def build_corpus(
     projects_dir: Optional[Path] = None,
     logs_dir: Optional[Path] = None,
@@ -532,6 +588,8 @@ def build_corpus(
     since: Optional[datetime] = None,
     include_unlabeled: bool = False,
     min_turn_chars: int = 1,
+    blindtest_dir: Optional[Path] = None,
+    conversation_overrides: Optional[Dict[str, str]] = None,
 ) -> Corpus:
     """扫描全部 transcripts，产出特征化语料。"""
     index = build_label_index(
@@ -540,6 +598,12 @@ def build_corpus(
         ai_verify_db=ai_verify_db,
         hook_event_paths=hook_event_paths,
     )
+    overrides = (
+        conversation_overrides
+        if conversation_overrides is not None
+        else load_conversation_model_overrides(blindtest_dir)
+    )
+    index.conversation_overrides = overrides
 
     corpus = Corpus(built_at=datetime.now().isoformat())
     n_conversations = 0
@@ -570,6 +634,9 @@ def build_corpus(
                     if turn.label is None:
                         turn.label = task_model
                         turn.label_source = "hook_task"
+        # 启动记录 / 手工纠偏：覆盖指纹碰撞导致的误标
+        if overrides:
+            apply_conversation_overrides(turns, overrides)
         for turn in turns:
             if len(turn.full_text) < min_turn_chars and not turn.tool_batches:
                 continue

@@ -88,6 +88,7 @@ ai-verify blindtest eval --split default --tau 0.7 --sweep
 | **隐藏 test 盲评（2026-07-13）** | 见下节；**勿与 LOCO-CV 91.7% 混报** |
 | **Cheap GT + hook_task 对齐（2026-07-13）** | Task 子代理用 `hook.task`↔transcript 指纹对齐；语料曾 **53** 样本；split `cheap-gt`：**Acc@forced 87.5%**（n=16）、**Acc@τ=0.7 90%**（coverage 62.5%） |
 | **GT 10-scenario 扩量（2026-07-13）** | composer/gpt-sol/gpt-terra 各补满 **10** 会话（fable 不扩、存量进闭集；grok 已 ≥10）；语料 **78** 样本；split `cheap-gt-v2` 复测：见下节 |
+| **APP-12 长会话扩量（2026-07-15）** | 每便宜类 +5 真实 ≥5-turn 会话；语料 **163** 样本；split `cheap-gt-v3`：**n_test=32**；见下节 |
 
 ### 隐藏 test 盲评（2026-07-13，split=`default` seed=42）
 
@@ -159,6 +160,31 @@ Runs（复测）：`~/.ai-verify/blindtest/runs/20260713-203239/`（train）、`
 
 **勿与 LOCO-CV 91.7% 或旧 Acc@forced 66.7%（default split n=3）混报。**
 
+### Cheap GT v3 长会话扩量（2026-07-15，split=`cheap-gt-v3` seed=42）
+
+采集：固定模型 Task 子代理（非 Auto）× 三便宜类 × 五场景（解释/编辑草稿/重构提案/Plan/工具密集），每会话 resume 至 **5 turns**。并行同 prompt 曾导致 `hook_task` 指纹碰撞、全部误标为 terra；已用 `~/.ai-verify/blindtest/conversation_model_overrides.json`（`launch_override`）按启动模型纠偏，并让冲突指纹不再静默覆盖。
+
+| 模型 | 会话 | 长会话(≥5) | 样本 | test 会话 / 样本 |
+|------|-----:|----------:|-----:|-----------------:|
+| composer-2.5-fast | 15 | 5 | 35 | 3 / 11 |
+| gpt-5.6-sol-medium | 15 | 5 | 35 | 3 / 3 |
+| gpt-5.6-terra-medium | 15 | 5 | 35 | 3 / 3 |
+| grok-4.5 | 15 | 5 | 52 | 3 / 14 |
+| claude-fable-5 | 5 | 0 | 6 | 1 / 1（不扩） |
+
+划分：train 39 / val 13 / test 13 会话；密封 **32** 条。标签来源：launch_override 75 / hook_task 37 / hook 37 / structured_log 11 / uniform 3。`inventory --split cheap-gt-v3`：**ready**（n_test=32≥30；每便宜类长会话≥5、test 会话≥3）。未覆盖 `cheap-gt-v2`。
+
+| 评估 | 指标 | 值 |
+|------|------|----|
+| Val Acc（非盲评） | | 44.4%（T=3.05；n_train=86 / n_val=45） |
+| **Acc@forced** | | **53.1%**（n=32 / 13 会话） |
+| macro-F1 / ECE / Brier | | 0.380 / 0.079 / 0.627 |
+| **Acc@τ=0.7** | | **100%**（coverage **6.2%**；几乎全弃权） |
+
+混淆（forced）：grok 11/14；composer 3/11（多→sol）；sol/terra 近亲仍混；fable 0/1。读法：扩量后 forced 从 v2 的 78.6%（n=14）降到 53.1%（n=32）——长会话 + 近亲类更难，属预期平台期，优先 B3 近亲混淆而非宣称涨点。
+
+Runs：`~/.ai-verify/blindtest/runs/20260715-113407/`（train）、`…-1`（forced）、`…-2`（selective）。
+
 ### cheap-gt-v2 通道消融 + Auto 弱验证（2026-07-13）
 
 `ablate --split cheap-gt-v2`（Acc@forced，n=14；runs `…/20260713-205144/`）：
@@ -205,9 +231,7 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 3. ~~**A1** `cursor doctor|tasks|task --json`~~（已完成）
 4. ~~**A2** `extensions/verai-cursor` 骨架~~（已落仓；待 `npm i && compile && vsce package` dogfood）
 5. **A3**：面板会话选择器 / 占比条与 CLI 对账；静默 import
-6. **B2 / APP-12**：每便宜类再补真实长会话（非模板）；目标 n_test ≥30  
-   - 2026-07-14 盘点：`import --since 7d --full` + `build-corpus` → **86** 标签样本；composer/sol/terra 仍各 10 短会话（0 条 ≥5-turn）；`cheap-gt-v2` **n_test=14**。  
-   - 新增 `ai-verify blindtest inventory [--split cheap-gt-v2]` 对照缺口；阻断项是手选模型长会话采集，不是流水线。
+6. ~~**B2 / APP-12**~~：`cheap-gt-v3` 已达标（n_test=32；每便宜类 ≥5 长会话、test ≥3 会话）；下一步 **B3** 近亲混淆
 7. **C**：Dogfood → 5 人 alpha → VSIX 软发布（见 ROADMAP Track C）
 8. **Phase 3**（平台期后且用户要求）：sentence-transformers / 微调
 9. **可选**：周期探针先验（D/F）、ITT（E）、proxy merge — 仅用户点名时做
@@ -226,7 +250,7 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 先读 docs/ROADMAP.md、docs/PROJECT_STATUS.md、docs/research/EXPERIMENT_PROTOCOL.md。
 不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2 盲评与消融、CLI --json、扩展骨架、D/F/ITT（除非用户点名）。
 产品判断：最根本能力是模型盲测；产品化主路径是侧边栏会话占比（事实/推断分轨）。
-下一优先：扩展 npm compile + VSIX dogfood；或 B2 真实长会话扩量；微调后置。
+下一优先：扩展 dogfood / B3 近亲混淆；微调后置。`cheap-gt-v3` 已替代 v2 作为扩量后主 split。
 回归：venv/bin/python -m pytest -q tests -k "not ml_optional"。
 保持 factual vs inferred 分轨与隐私边界。
 ```

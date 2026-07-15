@@ -7,11 +7,13 @@ from datetime import datetime
 import pytest
 
 from ai_verify.blindtest.corpus import (
+    LabelIndex,
     build_corpus,
     extract_turns,
     load_corpus,
     parse_user_timestamp,
     save_corpus,
+    task_fingerprint,
 )
 
 
@@ -337,3 +339,44 @@ def test_corpus_save_load_roundtrip(tmp_path):
     assert len(loaded.samples) == len(corpus.samples)
     assert loaded.samples[0].label == "model-x"
     assert loaded.samples[0].features == corpus.samples[0].features
+
+
+def test_task_fingerprint_collision_skips_ambiguous():
+    idx = LabelIndex()
+    prompt = "You are generating ground-truth Cursor usage for VerAI blindtest (APP-12). " + (
+        "x" * 40
+    )
+    fp = task_fingerprint(prompt)
+    assert fp
+    idx.set_task_model(fp, "composer-2.5-fast")
+    idx.set_task_model(fp, "gpt-5.6-sol-medium")
+    assert fp in idx.task_models_ambiguous
+    assert fp not in idx.task_models
+
+
+def test_conversation_overrides_win_over_mislabel(tmp_path):
+    projects = tmp_path / "projects"
+    logs = tmp_path / "logs"
+    _write_transcript(
+        projects,
+        "subagent-a",
+        [
+            (
+                "You are generating ground-truth Cursor usage for VerAI blindtest (APP-12). "
+                + ("explain inventory gaps " * 8),
+                [{"text": "answer"}],
+            )
+        ],
+    )
+    _write_structured_log(logs, [])
+    tracking = tmp_path / "tracking.db"
+    _write_tracking_db(tracking, [])
+    corpus = build_corpus(
+        projects_dir=projects,
+        logs_dir=logs,
+        tracking_db=tracking,
+        conversation_overrides={"subagent-a": "composer-2.5-fast"},
+    )
+    assert len(corpus.samples) == 1
+    assert corpus.samples[0].label == "composer-2.5-fast"
+    assert corpus.samples[0].label_source == "launch_override"

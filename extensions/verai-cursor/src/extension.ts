@@ -53,6 +53,11 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
         await this.loadTask(msg.taskId);
       } else if (msg?.type === "openLatest") {
         await this.openLatest();
+      } else if (msg?.type === "openSettings") {
+        await vscode.commands.executeCommand(
+          "workbench.action.openSettings",
+          "verai.aiVerifyPath"
+        );
       }
     });
   }
@@ -118,7 +123,12 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
         "command-failed":
           "Run `ai-verify cursor doctor` in a terminal for safe diagnostic details.",
       };
-      this._post({ type: "error", message: err.message, fix: fixes[err.kind] });
+      this._post({
+        type: "error",
+        message: err.message,
+        fix: fixes[err.kind],
+        fixAction: err.kind === "not-found" ? "openSettings" : undefined,
+      });
       return;
     }
 

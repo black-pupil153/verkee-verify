@@ -86,7 +86,8 @@
     "compile": "tsc -p ./",
     "test": "npm run compile && tsc -p tsconfig.contracts.json && node --test test/*.test.js",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package --no-dependencies"
+    "package": "npm run compile && vsce package --no-dependencies",
+    "accept": "npm run compile && node --test test/accept-parity.test.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

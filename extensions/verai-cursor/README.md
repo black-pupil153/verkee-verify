@@ -96,11 +96,15 @@ ai-verify cursor task --latest --json
 cd extensions/verai-cursor
 npm install
 npm test
+# A3 验收：侧边栏字段 ≡ CLI --json（需本机 ai-verify + Cursor 数据）
+npm run accept
 npm run package
 ```
 
 `npm run package` 会先编译，再执行 `vsce package --no-dependencies`，产出
-`verai-cursor-0.1.0.vsix`。
+`verai-cursor-0.1.0.vsix`。`npm run accept` 用 bridge 拉 latest，再对同一
+`task_id` 跑 `ai-verify cursor task <id> --json`，核对 coverage / factual_* /
+inferred_*；预算 10 秒。
 
 ## 命令
 

@@ -1,6 +1,6 @@
 # VerAI 产品化与增长路线图
 
-> 更新日期：2026-07-15  
+> 更新日期：2026-07-16  
 > 决策锁定：插件形态 **1A**（侧边栏 Webview）· 带宽 **2B**（插件 MVP ∥ GT/盲测加固）
 
 ## 一句话目标
@@ -74,21 +74,22 @@ flowchart TB
 | `ai-verify cursor doctor --json` | 插件首屏健康检查 | ✅ |
 | `ai-verify cursor tasks --json --limit N` | 最近会话列表 | ✅ |
 | `ai-verify cursor task [--latest\|id] --json` | 单会话报告 | ✅ |
-| 插件内静默 `cursor import --since 1d` | 刷新数据 | 待接扩展 |
+| 插件内静默 `cursor import --since 1d` | 刷新数据 | ✅（扩展 refresh / ready） |
 
-### A3. 面板 UX
+### A3. 面板 UX ✅（dogfood）
 
-1. 会话选择器（最近 N；默认 latest；手动刷新）
-2. 模型占比堆叠条 + 表（事实 / 推断分轨；`pending-infer` 标注）
-3. 可信度一行：`coverage` +「推断≠官方真名」
+1. 会话选择器（最近 N；默认 latest；手动刷新）✅
+2. 模型占比堆叠条 + 表（事实 / 推断分轨；`pending-infer` 标注）✅
+3. 可信度一行：`coverage` +「推断≠官方真名」✅
 
 ### A4. 安装路径（软发布）
 
-1. `vsce package` → `.vsix`，文档写 Install from VSIX
-2. 依赖本机 `ai-verify` 在 PATH；doctor 失败给修复步骤
-3. 可选提示 `cursor hooks install`
+1. `vsce package` → `.vsix`，文档写 Install from VSIX ✅（`npm run package`）
+2. 依赖本机 `ai-verify` 在 PATH；doctor 失败给修复步骤 ✅（含 Open Settings）
+3. 可选提示 `cursor hooks install`（软发布时补强）
 
-**验收**：侧边栏打开 → 选最近会话 → 10 秒内看到占比，与 CLI 数字一致。
+**验收**：侧边栏打开 → 选最近会话 → 10 秒内看到占比，与 CLI 数字一致。  
+本机：`cd extensions/verai-cursor && npm run accept`（bridge ≡ `cursor task --json`）。
 
 ---
 

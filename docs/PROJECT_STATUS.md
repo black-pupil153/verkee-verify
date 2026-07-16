@@ -1,17 +1,17 @@
 # VerAI 项目阶段交接
 
-> 更新日期：2026-07-15  
+> 更新日期：2026-07-16  
 > 适用对象：继续本项目的下一会话 / 下一位开发者
 
 ## 一句话状态
 
-VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲评 + Cheap GT `cheap-gt-v3`（Acc@forced **53.1%** n=32）已完成。产品化已开跑：**侧边栏扩展骨架** + **CLI `--json`** + **B3 近亲门控 MVP**（见 [`ROADMAP.md`](ROADMAP.md)）。微调后置。
+VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲评 + Cheap GT `cheap-gt-v3`（Acc@forced **53.1%** n=32）已完成。产品化 **A3 侧边栏 dogfood** 已通：会话选择器 + 事实/推断堆叠条/表 + coverage、静默 `import --since 1d`、doctor 可修复、`npm run accept` 与 CLI `--json` 对账（见 [`ROADMAP.md`](ROADMAP.md)）。下一主线 **A4 软发布 / Track C alpha**。微调后置。
 
 ## 仓库与运行状态
 
 - GitHub：<https://github.com/black-pupil153/VerAI>
 - 本地仓库根目录：`/Users/gelion/code/alibaba/ai-verify`
-- 分支：`main`，已跟踪 `origin/main`
+- 分支：本地 `a3-sidebar-dogfood`（自 `leo24yuyu/app-12-…`；含 APP-12 + B3 + A3 dogfood）
 - 本地语料/模型在 `~/.ai-verify/blindtest/`（不入 git）；split registry / sealed labels / runs 亦在此目录。
 - `venv/`、`.pytest_cache/`、`.ruff_cache/`、本地数据库和日志均已忽略，测试夹具 `tests/fixtures/**/*.log` 与脱敏 `*.ndjson` 是特意纳入 Git 的例外。
 
@@ -245,20 +245,32 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 
 完整测试集会触发可选的 ML / Hugging Face 路径；除非本次工作涉及 ML 指纹依赖，否则以上基线命令应作为回归检查。`tests/test_cursor_usage.py` 已隔离本机 Cursor hook 事件路径，保留这项隔离。
 
+### A3 侧边栏 dogfood（2026-07-16）
+
+| 项 | 结果 |
+|----|------|
+| 面板 | 会话选择器（最近 N / 选中态）+ 事实/推断**堆叠条+表** + coverage / pending-infer；推断 disclaimer |
+| 刷新 | ready/Refresh 静默 `cursor import --since 1d`；失败仅 notice，仍展示缓存 |
+| doctor | green / green·warnings / needs fix；CLI not found → Open Settings → `verai.aiVerifyPath` |
+| 打包 | `cd extensions/verai-cursor && npm run package` → `verai-cursor-0.1.0.vsix` |
+| 对账 | `npm run accept`：bridge `task` ≡ `ai-verify cursor task <id> --json`（coverage / factual_* / inferred_*；<10s） |
+| 分轨 | 推断不写 `resolved_model`；面板不展示 prompt/response 正文 |
+
+分支：`a3-sidebar-dogfood`。装 VSIX 后 Activity Bar → VerAI 即可 dogfood。
+
 ## 下一阶段建议
 
-**唯一主线：A3 侧边栏 dogfood → 与 CLI 对账 → 可装 VSIX。**  
+**唯一主线：A4 软发布（Install from VSIX 文档/Release）→ Track C closed alpha（5–15 人）。**  
 B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再做。
 
-已完成（勿重做）：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2/v3、B1–B3、CLI `--json`、扩展骨架。
+已完成（勿重做）：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2/v3、B1–B3、CLI `--json`、扩展骨架、**A3 侧边栏 dogfood**。
 
-本会话执行清单（A3）：
+本会话执行清单（A4 / C）：
 
-1. `extensions/verai-cursor`：`npm i && npm run compile`（必要时 `vsce package`）
-2. 面板：会话选择器（最近 N / latest）+ 事实/推断占比条/表 + coverage 一行
-3. 静默 `cursor import --since 1d`（刷新）；doctor 失败给 PATH/`verai.aiVerifyPath` 修复步骤
-4. 验收：侧边栏打开 → 选最近会话 → 10 秒内占比与 `ai-verify cursor task --json` 一致
-5. 结果写回 `PROJECT_STATUS`；能 dogfood 则标 A3 进度
+1. GitHub Release + VSIX 附件；README 一页安装路径（hooks install 可选提示）
+2. 自用 dogfood 日记：doctor 绿、空数据、PATH 失败路径各走一遍
+3. 招募 5 人 alpha；面板底部极轻 `~/.ai-verify/feedback.jsonl`（默认不上报）可选
+4. 结果写回 `PROJECT_STATUS`
 
 ## 安全边界
 
@@ -271,15 +283,15 @@ B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再�
 ## 下一会话开场提示
 
 ```text
-执行 A3 侧边栏 dogfood（产品化主线）。先读 docs/ROADMAP.md（A3/A4）、docs/PROJECT_STATUS.md、extensions/verai-cursor/README.md。
+执行 A4 软发布 + Track C alpha 筹备（产品化主线）。先读 docs/ROADMAP.md（A4/C）、docs/PROJECT_STATUS.md、extensions/verai-cursor/README.md。
 
-不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT、B1–B3 近亲门控、CLI --json、扩展骨架、D/F/ITT/微调（除非点名）。
-分支：leo24yuyu/app-12-扩充真实长会话-gt-至-n_test-30（含 APP-12 + B3；可继续其上或新开 a3 分支）。
+不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT、B1–B3、CLI --json、扩展骨架、A3 dogfood、D/F/ITT/微调（除非点名）。
+分支：a3-sidebar-dogfood（或自其上开 a4 分支）。
 
 本会话只做：
-1) extensions/verai-cursor 编译/打包；会话选择器 + 事实/推断占比 + coverage
-2) 接静默 import --since 1d；doctor 失败可修复
-3) 验收：侧边栏数字 ≡ ai-verify cursor task --json（10 秒内）
+1) VSIX 软发布路径：Release/文档 Install from VSIX；可选 hooks install 提示
+2) dogfood 路径走通（doctor 绿 / PATH 修复 / 空数据）；必要时补反馈 jsonl
+3) alpha 5 人名单与「是否看懂占比 / 是否信任推断」问卷草稿
 4) 写回 PROJECT_STATUS；回归 venv/bin/python -m pytest -q tests -k "not ml_optional"
 
 保持 factual vs inferred 分轨与隐私边界。

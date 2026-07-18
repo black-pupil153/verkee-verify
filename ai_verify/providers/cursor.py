@@ -188,8 +188,25 @@ def probe_log_files_summary(log_files: List[Path]) -> Dict[str, Any]:
     }
 
 
+def header_display_title(header: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Pick the user-visible session title from a composer header.
+
+    Prefer auto-generated ``name`` over ``subtitle`` (often first-message /
+    activity snippets). Never reads prompt/response bodies.
+    """
+    if not header:
+        return None
+    for key in ("name", "title", "subtitle"):
+        value = header.get(key)
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                return text
+    return None
+
+
 def probe_composer_headers(global_state_db: Path) -> Dict[str, Any]:
-    """探测 composer.composerHeaders 是否存在。"""
+    """探测 composer headers（ItemTable JSON 与 table-gated 表）。"""
     result: Dict[str, Any] = {"exists": False, "composer_count": 0}
     if not global_state_db.is_file():
         return result
@@ -197,20 +214,22 @@ def probe_composer_headers(global_state_db: Path) -> Dict[str, Any]:
     try:
         with _open_sqlite_readonly(global_state_db) as conn:
             row = conn.execute(
-                "SELECT value FROM ItemTable WHERE key = ?",
+                "SELECT 1 FROM ItemTable WHERE key = ?",
                 (COMPOSER_HEADERS_KEY,),
             ).fetchone()
-            if not row:
-                return result
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            table_exists = "composerHeaders" in tables
+            if row or table_exists:
+                result["exists"] = True
+        headers = load_composer_headers(global_state_db)
+        result["composer_count"] = len(headers)
+        if headers:
             result["exists"] = True
-            data = json.loads(row[0])
-            if isinstance(data, dict) and "allComposers" in data:
-                composers = data["allComposers"]
-            elif isinstance(data, list):
-                composers = data
-            else:
-                composers = []
-            result["composer_count"] = len(composers)
     except (sqlite3.Error, json.JSONDecodeError) as exc:
         result["error"] = str(exc)
 
@@ -218,9 +237,38 @@ def probe_composer_headers(global_state_db: Path) -> Dict[str, Any]:
 
 
 def load_composer_headers(global_state_db: Path) -> Dict[str, Dict[str, Any]]:
-    """读取 composer headers，返回 composerId -> header dict。"""
+    """读取 composer headers，返回 composerId -> header dict。
+
+    Cursor 新版本在 ``composerHeaders`` 表存 Agent/Glass 会话（含自动生成
+    ``name``）；旧版仍写 ItemTable ``composer.composerHeaders`` JSON。两者合并，
+    同 id 时取 ``lastUpdatedAt`` 较新的一侧。
+    """
     if not global_state_db.is_file():
         return {}
+
+    out: Dict[str, Dict[str, Any]] = {}
+
+    def _upsert(item: Dict[str, Any]) -> None:
+        cid = item.get("composerId") or item.get("id")
+        if not cid:
+            return
+        key = str(cid)
+        item = dict(item)
+        item.setdefault("composerId", key)
+        existing = out.get(key)
+        if existing is None:
+            out[key] = item
+            return
+        old_ts = existing.get("lastUpdatedAt") or 0
+        new_ts = item.get("lastUpdatedAt") or 0
+        try:
+            old_n = int(old_ts)
+            new_n = int(new_ts)
+        except (TypeError, ValueError):
+            out[key] = item
+            return
+        if new_n >= old_n:
+            out[key] = item
 
     try:
         with _open_sqlite_readonly(global_state_db) as conn:
@@ -228,26 +276,42 @@ def load_composer_headers(global_state_db: Path) -> Dict[str, Dict[str, Any]]:
                 "SELECT value FROM ItemTable WHERE key = ?",
                 (COMPOSER_HEADERS_KEY,),
             ).fetchone()
-            if not row:
-                return {}
-            data = json.loads(row[0])
-            if isinstance(data, dict) and "allComposers" in data:
-                composers = data["allComposers"]
-            elif isinstance(data, list):
-                composers = data
-            else:
-                return {}
+            if row:
+                data = json.loads(row[0])
+                if isinstance(data, dict) and "allComposers" in data:
+                    composers = data["allComposers"]
+                elif isinstance(data, list):
+                    composers = data
+                else:
+                    composers = []
+                for item in composers:
+                    if isinstance(item, dict):
+                        _upsert(item)
 
-            out: Dict[str, Dict[str, Any]] = {}
-            for item in composers:
-                if not isinstance(item, dict):
-                    continue
-                cid = item.get("composerId") or item.get("id")
-                if cid:
-                    out[str(cid)] = item
-            return out
+            tables = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            if "composerHeaders" in tables:
+                for cid, value, last_updated in conn.execute(
+                    "SELECT composerId, value, lastUpdatedAt FROM composerHeaders"
+                ):
+                    if not cid or not value:
+                        continue
+                    try:
+                        item = json.loads(value)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(item, dict):
+                        continue
+                    if last_updated is not None and "lastUpdatedAt" not in item:
+                        item["lastUpdatedAt"] = last_updated
+                    _upsert(item)
+        return out
     except (sqlite3.Error, json.JSONDecodeError):
-        return {}
+        return out
 
 
 def probe_agent_transcripts(projects_dir: Path) -> Dict[str, Any]:

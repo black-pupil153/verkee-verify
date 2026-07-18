@@ -585,7 +585,7 @@ CLI `--score` 与 `get_model_scores()` 已有；完整 VerifyEngine 按模型补
 | import `--since 30d --full` | 任务/事件可导入；hook 10 条中 resolved 6 |
 | 任务 `906dea0f` 产出占比 | claude-fable-5 **64.2%** / grok-4.5 **35.8%**（符合设计验收） |
 | Auto 任务 | 无事实 → `pending-infer`（待盲测覆盖）；报表分轨 `factual_*` / `inferred_*` + `coverage`；保留 confidence / unknown |
-| 标题 | 仅当 `composerId` 与 task_id 对齐时有 subtitle；Glass/agent-transcript 任务常为「(无标题)」——不读 prompt 补标题 |
+| 标题 | 读 `composerHeaders` **表** + 旧 ItemTable JSON；优先自动生成 `name`，再 `title`/`subtitle`；不读 prompt 补标题 |
 | 回归 | `pytest -q tests -k "not ml_optional"` → **110 passed** |
 
 ---

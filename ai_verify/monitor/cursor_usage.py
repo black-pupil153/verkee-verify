@@ -19,6 +19,7 @@ from ai_verify.providers.cursor import (
     CursorPaths,
     _file_inode,
     discover_cursor_paths,
+    header_display_title,
     load_composer_headers,
     probe_structured_logs,
     read_ai_code_hashes,
@@ -654,8 +655,7 @@ class CursorUsageImporter:
             meta = task_meta.get(tid, {})
             summary = summaries.get(tid) or {}
             title = (
-                header.get("subtitle")
-                or header.get("title")
+                header_display_title(header)
                 or summary.get("title")
                 or summary.get("tldr")
             )
@@ -705,13 +705,13 @@ class CursorUsageImporter:
             created = header.get("createdAt") or header.get("lastUpdatedAt")
             if since_iso and created and str(created) < since_iso:
                 continue
+            summary = summaries.get(cid) or {}
             self.db.save_cursor_task(
                 {
                     "task_id": cid,
-                    "title": header.get("subtitle")
-                    or header.get("title")
-                    or (summaries.get(cid) or {}).get("title")
-                    or (summaries.get(cid) or {}).get("tldr"),
+                    "title": header_display_title(header)
+                    or summary.get("title")
+                    or summary.get("tldr"),
                     "mode": header.get("unifiedMode") or "unknown",
                     "route_kind": "unknown",
                     "started_at": created,

@@ -4,6 +4,8 @@ from pathlib import Path
 
 from ai_verify.providers.cursor import (
     discover_cursor_paths,
+    header_display_title,
+    load_composer_headers,
     probe_ai_tracking_schema,
     probe_structured_logs,
     read_conversation_summaries,
@@ -185,3 +187,109 @@ def test_run_doctor_optional_proxy_does_not_fail_when_core_ok(tmp_path, monkeypa
     assert all(
         c["ok"] or c.get("optional") for c in payload["checks"]
     )
+
+
+def test_header_display_title_prefers_name():
+    assert header_display_title({"name": "Auto title", "subtitle": "first msg"}) == (
+        "Auto title"
+    )
+    assert header_display_title({"subtitle": " only sub "}) == "only sub"
+    assert header_display_title({}) is None
+    assert header_display_title(None) is None
+
+
+def test_load_composer_headers_merges_table_over_json(tmp_path):
+    """Table-gated composerHeaders wins for Agent/Glass sessions missing from JSON."""
+    import json
+    import sqlite3
+
+    state_db = tmp_path / "state.vscdb"
+    legacy = {
+        "allComposers": [
+            {
+                "composerId": "legacy-1",
+                "subtitle": "old subtitle",
+                "lastUpdatedAt": 100,
+            },
+            {
+                "composerId": "shared-1",
+                "subtitle": "stale subtitle",
+                "lastUpdatedAt": 100,
+            },
+        ]
+    }
+    with sqlite3.connect(state_db) as conn:
+        conn.execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)")
+        conn.execute(
+            "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
+            ("composer.composerHeaders", json.dumps(legacy)),
+        )
+        conn.execute(
+            """
+            CREATE TABLE composerHeaders (
+                composerId TEXT PRIMARY KEY,
+                workspaceId TEXT,
+                createdAt INTEGER,
+                lastUpdatedAt INTEGER,
+                isArchived INTEGER,
+                isSubagent INTEGER,
+                recency INTEGER,
+                checkpointAt INTEGER,
+                value TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO composerHeaders
+            (composerId, workspaceId, createdAt, lastUpdatedAt, isArchived,
+             isSubagent, recency, checkpointAt, value)
+            VALUES (?, ?, ?, ?, 0, 0, ?, NULL, ?)
+            """,
+            (
+                "glass-1",
+                "ws",
+                200,
+                200,
+                200,
+                json.dumps(
+                    {
+                        "composerId": "glass-1",
+                        "name": "A3 sidebar dogfood tasks",
+                        "subtitle": "Edited settings.json",
+                        "lastUpdatedAt": 200,
+                        "unifiedMode": "agent",
+                    }
+                ),
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO composerHeaders
+            (composerId, workspaceId, createdAt, lastUpdatedAt, isArchived,
+             isSubagent, recency, checkpointAt, value)
+            VALUES (?, ?, ?, ?, 0, 0, ?, NULL, ?)
+            """,
+            (
+                "shared-1",
+                "ws",
+                300,
+                300,
+                300,
+                json.dumps(
+                    {
+                        "composerId": "shared-1",
+                        "name": "Fresh auto name",
+                        "subtitle": "activity",
+                        "lastUpdatedAt": 300,
+                    }
+                ),
+            ),
+        )
+        conn.commit()
+
+    headers = load_composer_headers(state_db)
+    assert "legacy-1" in headers
+    assert headers["glass-1"]["name"] == "A3 sidebar dogfood tasks"
+    assert headers["shared-1"]["name"] == "Fresh auto name"
+    assert header_display_title(headers["glass-1"]) == "A3 sidebar dogfood tasks"

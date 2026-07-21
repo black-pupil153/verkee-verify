@@ -277,12 +277,22 @@ B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再�
 
 已完成（勿重做）：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2/v3、B1–B3、CLI `--json`、扩展骨架、**A3 dogfood、A3.1/A3.2**。
 
-下一会话执行清单（A4 / C）：
+### A4 软发布进度（2026-07-21）
 
-1. 重打 VSIX（含 A3.1/A3.2 UI）+ GitHub Release 附件；README 一页安装路径（hooks install 可选提示）
-2. 自用 dogfood：`python tools/dogfood_app16.py`；doctor 绿、空数据、PATH 失败路径各走一遍
-3. 招募 5 人 alpha；面板底部极轻 `~/.ai-verify/feedback.jsonl`（默认不上报）可选
-4. 结果写回 `PROJECT_STATUS`
+| 项 | 状态 |
+|----|------|
+| 根 README 一页 Install from VSIX | ✅ |
+| 扩展 README + hooks install 提示 | ✅ |
+| `docs/ALPHA_CHECKLIST.md` | ✅ |
+| 本机重打 `verai-cursor-0.1.0.vsix`（A3.1/A3.2 UI） | ✅（gitignore，Release 附件） |
+| dogfood `tools/dogfood_app16.py` | ✅ 本机通过 |
+| GitHub Release 挂 VSIX | ⏳ 需有效 `gh` 登录后发布 tag `v0.1.0-sidebar` |
+
+下一会话 / 本机剩余：
+
+1. `gh auth refresh`（若 token 失效）→ push `a3-sidebar-dogfood` → Release 挂 VSIX
+2. 按 [`ALPHA_CHECKLIST.md`](ALPHA_CHECKLIST.md) 招募 5 人；收集两问反馈
+3. 连续「不准 / 未知过高」再开 Track B（含 B6）
 
 ## 安全边界
 

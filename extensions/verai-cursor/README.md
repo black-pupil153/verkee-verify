@@ -32,7 +32,8 @@ Windows 可用 `where ai-verify` 查找路径。如果终端能运行 CLI、Curs
 
 ## 从 VSIX 安装
 
-1. 下载 `verai-cursor-0.1.0.vsix`。
+1. 从 [GitHub Releases](https://github.com/black-pupil153/VerAI/releases) 下载  
+   `verai-cursor-0.1.0.vsix`（或本机 `npm run package` 产物）。
 2. 在 Cursor 打开 Extensions。
 3. 点击右上角 `⋯` → **Install from VSIX…**。
 4. 选择 `.vsix`，安装完成后按提示 Reload Window。
@@ -54,6 +55,14 @@ ai-verify cursor doctor
 ai-verify cursor import --since 7d
 ai-verify cursor task --latest --json
 ```
+
+**可选但推荐**：安装 Cursor hooks，提高 Auto 会话的事实覆盖（仍非云端逐步真名）：
+
+```bash
+ai-verify cursor hooks install
+```
+
+安装后新开或继续会话，再点侧边栏 Refresh。卸载用 `ai-verify cursor hooks uninstall`。
 
 随后打开 VerAI 侧边栏。正常情况下 5 秒内应看懂「哪个模型用得最多」。
 若没有数据，面板会显示正常空状态；若 CLI、PATH 或 JSON 契约异常，面板会
@@ -84,6 +93,7 @@ ai-verify cursor task --latest --json
 | invalid JSON | 更新本地 VerAI CLI，使版本与插件匹配 |
 | import warning | 面板会继续展示缓存；在终端运行 import 查看详情 |
 | No recent sessions | 执行 `ai-verify cursor import --since 7d` 扩大时间范围 |
+| 大量「未识别」 | 试 `ai-verify cursor hooks install` 后新开会话；Refresh 再看 |
 
 ## 开发与打包
 
@@ -98,8 +108,8 @@ npm run package
 
 `npm run package` 会先编译，再执行 `vsce package --no-dependencies`，产出
 `verai-cursor-0.1.0.vsix`。`npm run accept` 用 bridge 拉 latest，再对同一
-`task_id` 跑 `ai-verify cursor task <id> --json`，核对 coverage / factual_* /
-inferred_*；预算 10 秒。
+`task_id` 跑 `ai-verify cursor task <id> --json`，核对 `model_mix_v2` 与
+legacy 分轨字段；预算 10 秒（可设 `VERAI_AI_VERIFY_PATH`）。
 
 ## 命令
 

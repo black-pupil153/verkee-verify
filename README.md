@@ -86,32 +86,48 @@ ai-verify alert set https://你的飞书或钉钉webhook
 ai-verify alert test
 ```
 
-## Cursor Auto Usage
+## Cursor 侧边栏（软发布）
 
-只读本机元数据（不读 prompt/response 正文）。Cursor 未公开承诺每个 Auto 任务的底层模型；输出保留 **confidence**、**factual / inferred** 分轨与 `pending-infer`，不把推断写成事实，也不宣称云端逐步真名 100% 可知。
+看清**这个会话主要用了哪些模型**（本地计算，不上传对话正文）。产品默认读统一构成 `model_mix_v2`；确认/估算拆分只在折叠细则与 CLI `--verbose`。
+
+### 1. 安装 CLI
+
+```bash
+cd ai-verify
+python -m venv venv
+source venv/bin/activate
+pip install -e .
+ai-verify cursor doctor
+```
+
+### 2. 安装扩展（Install from VSIX）
+
+1. 从 [GitHub Releases](https://github.com/black-pupil153/VerAI/releases) 下载 `verai-cursor-0.1.0.vsix`  
+   （或本机构建：`cd extensions/verai-cursor && npm run package`）
+2. Cursor → Extensions → `⋯` → **Install from VSIX…** → 选中文件 → Reload
+3. Activity Bar 打开 **VerAI**；无数据时先：
+
+```bash
+ai-verify cursor import --since 7d
+```
+
+可选（提高事实覆盖）：`ai-verify cursor hooks install`，然后新开/继续会话再 Refresh。
+
+CLI 找不到时：Settings 搜索 `VerAI: AI Verify Path`，填入 `ai-verify` 绝对路径。  
+扩展说明与故障排查：[`extensions/verai-cursor/README.md`](extensions/verai-cursor/README.md)
+
+### 3. CLI 对照
 
 ```bash
 ai-verify cursor doctor
-ai-verify cursor import --since 30d
 ai-verify cursor tasks --limit 5
-ai-verify cursor task --latest
-ai-verify cursor board
-ai-verify cursor report --period weekly
+ai-verify cursor task --latest          # 默认统一构成
+ai-verify cursor task --latest -v       # 分轨细则
+ai-verify cursor task --latest --json   # 插件契约（含 model_mix_v2）
 ```
 
-可选：`ai-verify cursor hooks install` 补采 hook 事件中的 model 字段。
-
-机器可读（插件桥接）：
-
-```bash
-ai-verify cursor doctor --json
-ai-verify cursor tasks --json --limit 15
-ai-verify cursor task --latest --json
-```
-
-侧边栏扩展（开发中）：[`extensions/verai-cursor/`](extensions/verai-cursor/README.md)  
-产品路线图：[`docs/ROADMAP.md`](docs/ROADMAP.md)  
-设计与验收细节见 [`docs/CURSOR_AUTO_USAGE.md`](docs/CURSOR_AUTO_USAGE.md)。
+只读本机元数据（不读 prompt/response 正文）。推断 ≠ Cursor 官方逐步真名，且不得写入 `resolved_model`。  
+设计细节：[`docs/CURSOR_AUTO_USAGE.md`](docs/CURSOR_AUTO_USAGE.md) · 路线图：[`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 ## 配置与数据
 

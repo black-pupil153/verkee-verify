@@ -100,12 +100,12 @@ flowchart TB
 3. 可选提示 `cursor hooks install` ✅（根 README + 扩展 README）
 4. 根 README「Cursor 侧边栏（软发布）」一页安装路径 ✅
 5. Alpha 清单 [`docs/ALPHA_CHECKLIST.md`](ALPHA_CHECKLIST.md) ✅
-6. GitHub Release 挂 VSIX（推送后执行；见 PROJECT_STATUS）
+6. GitHub Release 挂 VSIX ✅ [v0.1.0-sidebar](https://github.com/black-pupil153/VerAI/releases/tag/v0.1.0-sidebar)
 
 **验收**：侧边栏打开 → 选最近会话 → **5 秒内**看懂谁用得最多；与 CLI `model_mix_v2` 数字一致。  
 本机：`VERAI_AI_VERIFY_PATH=../../venv/bin/ai-verify npm run accept`（bridge ≡ `cursor task --json`，含 `model_mix_v2`）。
 
-**节奏**：A3.1/A3.2 ✅ → **A4 文档/打包 ✅ → Release 挂 VSIX** → closed alpha（约 5 人）。
+**节奏**：A3.1/A3.2 ✅ → A4 软发布 ✅ → **closed alpha（约 5 人）**。
 
 ---
 

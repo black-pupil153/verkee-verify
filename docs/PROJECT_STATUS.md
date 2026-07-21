@@ -5,7 +5,7 @@
 
 ## 一句话状态
 
-VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲评 + Cheap GT `cheap-gt-v3`（Acc@forced **53.1%** n=32）已完成。产品化 **A3 dogfood + A3.1/A3.2 理解性重构**（`model_mix_v2` 统一构成 + 一层子代理 + 侧边栏简化）已通。当前主线是 **A4 软发布 → closed alpha**。Track B（GT/特征）反馈触发；**B6 单 token 分布特征（PAMELA）已立项**，不抢主线。
+VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲评 + Cheap GT `cheap-gt-v3`（Acc@forced **53.1%** n=32）已完成。产品化 **A3 dogfood + A3.1/A3.2 理解性重构**（`model_mix_v2` 统一构成 + 一层子代理 + 侧边栏简化）已通。**A4 软发布已完成**（[Release v0.1.0-sidebar](https://github.com/black-pupil153/VerAI/releases/tag/v0.1.0-sidebar)）。当前主线是 **closed alpha（Track C）**。Track B（GT/特征）反馈触发；**B6 单 token 分布特征（PAMELA）已立项**，不抢主线。
 
 ## 仓库与运行状态
 
@@ -286,12 +286,12 @@ B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再�
 | `docs/ALPHA_CHECKLIST.md` | ✅ |
 | 本机重打 `verai-cursor-0.1.0.vsix`（A3.1/A3.2 UI） | ✅（gitignore，Release 附件） |
 | dogfood `tools/dogfood_app16.py` | ✅ 本机通过 |
-| GitHub Release 挂 VSIX | ⏳ 需有效 `gh` 登录后发布 tag `v0.1.0-sidebar` |
+| GitHub Release 挂 VSIX | ✅ [v0.1.0-sidebar](https://github.com/black-pupil153/VerAI/releases/tag/v0.1.0-sidebar) |
 
-下一会话 / 本机剩余：
+**A4 软发布已落地。** 下一主线：Track C closed alpha（约 5 人）。
 
-1. `gh auth refresh`（若 token 失效）→ push `a3-sidebar-dogfood` → Release 挂 VSIX
-2. 按 [`ALPHA_CHECKLIST.md`](ALPHA_CHECKLIST.md) 招募 5 人；收集两问反馈
+1. 按 [`ALPHA_CHECKLIST.md`](ALPHA_CHECKLIST.md) 发安装步骤 + 两问问卷
+2. 自用 dogfood 日记；PATH / 空数据卡点记回本文件
 3. 连续「不准 / 未知过高」再开 Track B（含 B6）
 
 ## 安全边界
@@ -305,16 +305,15 @@ B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再�
 ## 下一会话开场提示
 
 ```text
-执行 A4 软发布 + Track C alpha 筹备（产品化主线）。先读 docs/ROADMAP.md（A4/C）、docs/PROJECT_STATUS.md、extensions/verai-cursor/README.md。
+执行 Track C closed alpha（A4 已发布）。先读 docs/ALPHA_CHECKLIST.md、docs/ROADMAP.md、docs/PROJECT_STATUS.md。
 
-不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT、B1–B3、CLI --json、扩展骨架、A3 dogfood、A3.1/A3.2、B6/D/F/ITT/微调（除非点名）。
-分支：a3-sidebar-dogfood（或自其上开 a4 分支）。
+不要重做：A3/A3.1/A3.2、A4 Release、B6/盲测/微调（除非 alpha 反馈触发或点名）。
+Release：https://github.com/black-pupil153/VerAI/releases/tag/v0.1.0-sidebar
 
 本会话只做：
-1) 重打 VSIX（A3.1/A3.2 UI）+ GitHub Release；Install from VSIX；可选 hooks install 提示
-2) dogfood：python tools/dogfood_app16.py；doctor 绿 / PATH 修复 / 空数据
-3) alpha 5 人名单与「是否看懂占比 / 是否信任推断」问卷草稿
-4) 写回 PROJECT_STATUS；回归 venv/bin/python -m pytest -q tests -k "not ml_optional"
+1) 招募 ~5 人按 ALPHA_CHECKLIST 安装；收集两问（看懂占比 / 信任推断）
+2) 记录安装卡点（PATH/VSIX/空数据）写回 PROJECT_STATUS
+3) 连续不准/未知过高再开 Track B（含 B6）
 
 保持 factual vs inferred 分轨与隐私边界；产品默认读 model_mix_v2。
 ```

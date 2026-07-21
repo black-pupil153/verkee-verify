@@ -49,19 +49,34 @@ h3 {
 .meta,
 .disclaimer,
 .fix,
-.trust {
+.hint {
   color: var(--muted);
   margin: 4px 0 8px;
   line-height: 1.4;
 }
 
-.trust strong {
-  color: var(--fg);
-  font-weight: 600;
+.disclaimer,
+.hint {
+  font-size: 11px;
 }
 
-.disclaimer {
+.evidence {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.evidence summary {
+  cursor: pointer;
+  color: var(--muted);
   font-size: 11px;
+  user-select: none;
+}
+
+.evidence-list {
+  margin: 8px 0;
+  padding-left: 18px;
+  line-height: 1.45;
 }
 
 .notice {
@@ -163,7 +178,8 @@ button#refresh,
 .stack .seg.c3 { background: var(--c3); }
 .stack .seg.c4 { background: var(--c4); }
 .stack .seg.c5 { background: var(--c5); }
-.stack .seg.pending {
+.stack .seg.pending,
+.stack .seg.unknown {
   background: repeating-linear-gradient(
     -45deg,
     rgba(127, 127, 127, 0.55),

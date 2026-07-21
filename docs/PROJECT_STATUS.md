@@ -1,11 +1,11 @@
 # VerAI 项目阶段交接
 
-> 更新日期：2026-07-16  
+> 更新日期：2026-07-21  
 > 适用对象：继续本项目的下一会话 / 下一位开发者
 
 ## 一句话状态
 
-VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲评 + Cheap GT `cheap-gt-v3`（Acc@forced **53.1%** n=32）已完成。产品化 **A3 侧边栏 dogfood** 已通：会话选择器 + 事实/推断堆叠条/表 + coverage、静默 `import --since 1d`、doctor 可修复、`npm run accept` 与 CLI `--json` 对账（见 [`ROADMAP.md`](ROADMAP.md)）。下一主线 **A4 软发布 / Track C alpha**。微调后置。
+VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲评 + Cheap GT `cheap-gt-v3`（Acc@forced **53.1%** n=32）已完成。产品化 **A3 dogfood + A3.1/A3.2 理解性重构**（`model_mix_v2` 统一构成 + 一层子代理 + 侧边栏简化）已通。当前主线是 **A4 软发布 → closed alpha**。Track B（GT/特征）反馈触发；**B6 单 token 分布特征（PAMELA）已立项**，不抢主线。
 
 ## 仓库与运行状态
 
@@ -258,17 +258,29 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 
 分支：`a3-sidebar-dogfood`。装 VSIX 后 Activity Bar → VerAI 即可 dogfood。
 
+### A3.1 / A3.2 理解性重构（2026-07-21）
+
+| 项 | 结果 |
+|----|------|
+| `model_mix_v2` | `aggregate_task` 统一调用次数构成；确认/估算/未识别仅进细则 |
+| 会话范围 | 根任务 + 一层子代理；`list_tasks.request_count` ≡ 详情 `total_calls` |
+| CLI | 默认「本会话模型构成」；`--verbose` 才看分轨/状态/证据 |
+| 侧边栏 | 单一构成条 + 条件提示 + 折叠「这是怎么判断的？」；默认无事实/推断轨文案 |
+| 回归 | `pytest` cursor_usage/json/app16；`accept` 含 `model_mix_v2` 对账 |
+| 工具 | `tools/dogfood_app16.py` 本机日检；`tests/test_app16_dogfood.py` 合成 Auto 夹具 |
+
 ## 下一阶段建议
 
-**唯一主线：A4 软发布（Install from VSIX 文档/Release）→ Track C closed alpha（5–15 人）。**  
-B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再做。
+**唯一主线：A4 软发布（GitHub Release + VSIX）→ Track C closed alpha（5–15 人）。**  
+B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再做。  
+**B6（单 token 输出分布 → 盲测特征通道）**：已写入 [`docs/ROADMAP.md`](ROADMAP.md) Track B；依据 arXiv:2607.10252 / PAMELA。用途是给 `P(model | features)` 加一维超便宜主动特征，**不是**改成「有官方参考才验真」。未开工；反馈触发或点名再做。
 
-已完成（勿重做）：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2/v3、B1–B3、CLI `--json`、扩展骨架、**A3 侧边栏 dogfood**。
+已完成（勿重做）：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT 10-scenario、cheap-gt-v2/v3、B1–B3、CLI `--json`、扩展骨架、**A3 dogfood、A3.1/A3.2**。
 
-本会话执行清单（A4 / C）：
+下一会话执行清单（A4 / C）：
 
-1. GitHub Release + VSIX 附件；README 一页安装路径（hooks install 可选提示）
-2. 自用 dogfood 日记：doctor 绿、空数据、PATH 失败路径各走一遍
+1. 重打 VSIX（含 A3.1/A3.2 UI）+ GitHub Release 附件；README 一页安装路径（hooks install 可选提示）
+2. 自用 dogfood：`python tools/dogfood_app16.py`；doctor 绿、空数据、PATH 失败路径各走一遍
 3. 招募 5 人 alpha；面板底部极轻 `~/.ai-verify/feedback.jsonl`（默认不上报）可选
 4. 结果写回 `PROJECT_STATUS`
 
@@ -285,14 +297,14 @@ B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再�
 ```text
 执行 A4 软发布 + Track C alpha 筹备（产品化主线）。先读 docs/ROADMAP.md（A4/C）、docs/PROJECT_STATUS.md、extensions/verai-cursor/README.md。
 
-不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT、B1–B3、CLI --json、扩展骨架、A3 dogfood、D/F/ITT/微调（除非点名）。
+不要重做：Cursor P0/P1、长检索、G/H/C+B、Phase 1/2、GT、B1–B3、CLI --json、扩展骨架、A3 dogfood、A3.1/A3.2、B6/D/F/ITT/微调（除非点名）。
 分支：a3-sidebar-dogfood（或自其上开 a4 分支）。
 
 本会话只做：
-1) VSIX 软发布路径：Release/文档 Install from VSIX；可选 hooks install 提示
-2) dogfood 路径走通（doctor 绿 / PATH 修复 / 空数据）；必要时补反馈 jsonl
+1) 重打 VSIX（A3.1/A3.2 UI）+ GitHub Release；Install from VSIX；可选 hooks install 提示
+2) dogfood：python tools/dogfood_app16.py；doctor 绿 / PATH 修复 / 空数据
 3) alpha 5 人名单与「是否看懂占比 / 是否信任推断」问卷草稿
 4) 写回 PROJECT_STATUS；回归 venv/bin/python -m pytest -q tests -k "not ml_optional"
 
-保持 factual vs inferred 分轨与隐私边界。
+保持 factual vs inferred 分轨与隐私边界；产品默认读 model_mix_v2。
 ```

@@ -4,7 +4,7 @@ AI Verify CLI - 命令行入口
 
 import json
 import click
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from rich.console import Console
 from rich.table import Table
@@ -657,6 +657,12 @@ def cursor_tasks(since: str, limit: int, auto_only: bool, as_json: bool):
     is_flag=True,
     help="显示逐 turn 盲测细节（默认已对 Auto/Mixed 自动融合推断轨）",
 )
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="显示事实/推断分轨与产出占比等后台细节",
+)
 @click.option("--json", "as_json", is_flag=True, help="输出机器可读 JSON（插件桥接）")
 @click.option(
     "--include-per-request",
@@ -669,11 +675,13 @@ def cursor_task(
     search: Optional[str],
     score: bool,
     inferred: bool,
+    verbose: bool,
     as_json: bool,
     include_per_request: bool,
 ):
     """查看单个 Cursor 任务的模型用量详情"""
     from ai_verify.monitor.cursor_usage import (
+        UNKNOWN_MIX_LABEL,
         _bar,
         aggregate_task,
         render_task_score_table,
@@ -718,6 +726,7 @@ def cursor_task(
         )
         return
 
+    mix = report.model_mix_v2 or {}
     console.print(f"[bold]Task {report.task_id}[/bold]")
     console.print(f"标题:   {report.title or '(无标题)'}")
     console.print(f"模式:   {report.mode} | 路由: {report.route_kind}")
@@ -725,80 +734,113 @@ def cursor_task(
         ended = report.ended_at or "?"
         console.print(f"时间:   {report.started_at[:16]} ~ {ended[:16]}")
     console.print(
-        f"请求:   {report.request_count} turns | "
-        f"产出: {report.code_unit_count} code units | "
-        f"Subagent: {report.subagent_count}"
-    )
-    console.print(
-        f"可解析率: {report.resolution_rate * 100:.0f}% "
-        f"({report.resolved_requests}/{report.request_count} requests) | "
-        f"覆盖率: {report.coverage * 100:.0f}% "
-        f"(fact∪inferred；pending-infer={report.pending_infer_count})"
-    )
-    console.print(
-        "[dim]推断轨 ≠ 云端路由真值；仅 factual 为遥测事实。[/dim]"
+        f"模型调用: {mix.get('total_calls', report.request_count)} 次"
+        f"（含副代理 {mix.get('subagent_calls', 0)}） | "
+        f"Subagent 数: {report.subagent_count}"
     )
 
-    console.print("\n[bold]── 请求占比（合并展示）────────────────[/bold]")
-    for model, info in report.request_shares.items():
+    console.print("\n[bold]── 本会话模型构成 ────────────────────[/bold]")
+    models = mix.get("models") or {}
+    if models:
+        for model, info in models.items():
+            console.print(
+                f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  "
+                f"({info['call_count']} 次)"
+            )
+    else:
+        for model, info in report.request_shares.items():
+            console.print(
+                f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  "
+                f"({info['count']} 次)"
+            )
+
+    hints: List[str] = []
+    if mix.get("estimated_count"):
+        hints.append("部分结果为估算，非 Cursor 官方逐次真名")
+    unknown_n = int(mix.get("unknown_count") or 0)
+    if unknown_n:
+        hints.append(f"{unknown_n} 次未识别")
+    if hints:
+        console.print(f"[dim]{' · '.join(hints)}[/dim]")
+
+    if verbose:
         console.print(
-            f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  ({info['count']} requests)"
+            f"\n[dim]可解析率: {report.resolution_rate * 100:.0f}% "
+            f"({report.resolved_requests}/{report.request_count}) | "
+            f"覆盖率: {report.coverage * 100:.0f}% "
+            f"(fact∪inferred；pending-infer={report.pending_infer_count})[/dim]"
         )
-
-    if report.factual_request_shares:
-        console.print("\n[bold]── 事实轨（telemetry）────────────────[/bold]")
-        for model, info in report.factual_request_shares.items():
-            console.print(
-                f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  ({info['count']} requests)"
-            )
-
-    if report.inferred_request_shares:
-        console.print("\n[bold]── 推断轨（blindtest，非事实）────────[/bold]")
-        for model, info in report.inferred_request_shares.items():
-            console.print(
-                f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  ({info['count']} requests)"
-            )
-    elif report.pending_infer_count > 0:
         console.print(
-            "\n[yellow]有 pending-infer turns：已尝试自动推断；"
-            "低于阈值或无 transcript 时仍会保留 pending-infer。"
-            "逐 turn 细节: ai-verify cursor task --inferred[/yellow]"
+            "[dim]推断轨 ≠ 云端路由真值；仅 factual 为遥测事实。"
+            f" 细则确认/估算见 model_mix_v2（{UNKNOWN_MIX_LABEL} 为未识别桶）。[/dim]"
         )
-
-    if report.output_shares:
-        console.print("\n[bold]── 产出占比 ──────────────────────────[/bold]")
-        for model, info in report.output_shares.items():
+        if report.factual_request_shares:
+            console.print("\n[bold]── 事实轨（telemetry）────────────────[/bold]")
+            for model, info in report.factual_request_shares.items():
+                console.print(
+                    f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  "
+                    f"({info['count']} requests)"
+                )
+        if report.inferred_request_shares:
+            console.print("\n[bold]── 推断轨（blindtest，非事实）────────[/bold]")
+            for model, info in report.inferred_request_shares.items():
+                console.print(
+                    f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.0f}%  "
+                    f"({info['count']} requests)"
+                )
+        elif report.pending_infer_count > 0:
             console.print(
-                f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.1f}%  ({info['count']} units)"
+                "\n[yellow]有 pending-infer turns：已尝试自动推断；"
+                "低于阈值或无 transcript 时仍会保留 pending-infer。"
+                "逐 turn 细节: ai-verify cursor task --inferred[/yellow]"
             )
+        if report.output_shares:
+            console.print("\n[bold]── 产出占比（诊断）──────────────────[/bold]")
+            for model, info in report.output_shares.items():
+                console.print(
+                    f"  {model:<18} {_bar(info['pct'])}  {info['pct']:.1f}%  "
+                    f"({info['count']} units)"
+                )
+        detail_rows = [
+            (m, info)
+            for m, info in models.items()
+            if info.get("estimated_count") or info.get("confirmed_count")
+        ]
+        if detail_rows:
+            console.print("\n[bold]── 来源拆分（细则）──────────────────[/bold]")
+            for model, info in detail_rows:
+                console.print(
+                    f"  {model:<18} {info.get('confirmed_count', 0)} 确认 + "
+                    f"{info.get('estimated_count', 0)} 估算"
+                )
 
     if score and (report.output_shares or report.request_shares):
         console.print()
         console.print(render_task_score_table(report, db))
         from ai_verify.monitor.cursor_usage import get_model_scores
 
-        models = [
+        score_models = [
             m
             for m in set(report.output_shares) | set(report.request_shares)
-            if m not in ("unknown", "auto-opaque", "pending-infer")
+            if m not in ("unknown", "auto-opaque", "pending-infer", UNKNOWN_MIX_LABEL)
         ]
-        scores = get_model_scores(db, models)
-        if any(not scores.get(m) for m in models):
+        scores = get_model_scores(db, score_models)
+        if any(not scores.get(m) for m in score_models):
             console.print(
                 "[dim]部分模型无智力分记录，可对当前渠道运行 ai-verify score 补测[/dim]"
             )
 
-    if report.status_counts:
+    if verbose and report.status_counts:
         console.print("\n[bold]── 状态分布 ──────────────────────────[/bold]")
         parts = [f"{k}: {v}" for k, v in sorted(report.status_counts.items())]
         console.print("  " + " | ".join(parts))
 
-    if report.confidence_counts:
+    if verbose and report.confidence_counts:
         console.print("\n[bold]── 证据质量 ──────────────────────────[/bold]")
         for conf, count in sorted(report.confidence_counts.items(), reverse=True):
             console.print(f"  {conf}: {count}/{report.request_count} requests")
 
-    if report.subagents:
+    if verbose and report.subagents:
         console.print("\n[bold]── Subagent ─────────────────────────[/bold]")
         for sub in report.subagents:
             sid = str(sub.get("task_id", ""))[:8]
@@ -807,7 +849,7 @@ def cursor_task(
             model_hint = "unknown" if units == 0 else "see parent"
             console.print(f"  {sid} → {reqs} request(s), model {model_hint}")
 
-    if report.per_request:
+    if verbose and report.per_request:
         console.print("\n[bold]── Per-request 明细 ──────────────────[/bold]")
         console.print(
             f"  {'request_id':<22} {'selected':<12} {'resolved':<16} {'inferred':<12} {'status':<10} units tok"

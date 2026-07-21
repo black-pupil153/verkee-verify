@@ -1,11 +1,13 @@
 # Cursor Auto Usage — 设计与验收
 
-> 版本：v1.1  
-> 日期：2026-07-11  
-> 状态：**已实现并完成本机验收**（P0–P2.5 代码与测试已落地）  
+> 版本：v1.2  
+> 日期：2026-07-19  
+> 状态：**已实现并完成本机验收**（P0–P2.5 代码与测试已落地；A3.1 `model_mix_v2` 产品契约已接入）  
 > 适用范围：设计依据 + 维护说明；**不要**按旧「从零实现」清单重做功能
 
-权威交接与下一阶段优先级见 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)。
+权威交接与下一阶段优先级见 [`PROJECT_STATUS.md`](PROJECT_STATUS.md) / [`ROADMAP.md`](ROADMAP.md)。
+
+**产品默认视图（2026-07-19）**：对外展示优先消费 `model_mix_v2`（统一调用次数构成；根任务 + 一层子代理）。`factual_*` / `inferred_*` / `coverage` 仍输出，供 CLI `--verbose` 与兼容消费者；推断仍不得写入 `resolved_model`。
 
 ---
 

@@ -261,6 +261,8 @@ class TaskUsageReport:
     confidence_counts: Dict[str, int] = field(default_factory=dict)
     subagents: List[Dict[str, Any]] = field(default_factory=list)
     per_request: List[Dict[str, Any]] = field(default_factory=list)
+    # Unified product view: call-count mix; confirmed/estimated only for detail.
+    model_mix_v2: Dict[str, Any] = field(default_factory=dict)
 
 
 def task_summary_to_dict(summary: TaskSummary) -> Dict[str, Any]:
@@ -274,13 +276,17 @@ def task_report_to_dict(
     """Serialize TaskUsageReport for CLI --json / extension bridge.
 
     Omits per_request by default (heavy); plugin panels use share aggregates.
+    Always includes model_mix_v2 when present; keeps legacy dual-track fields.
     """
     payload = asdict(report)
     if not include_per_request:
         payload.pop("per_request", None)
+    if not payload.get("model_mix_v2"):
+        payload["model_mix_v2"] = _empty_model_mix_v2()
     payload["disclaimer"] = (
         "inferred tracks are not cloud routing ground truth; "
-        "only factual_* come from telemetry"
+        "only factual_* come from telemetry; "
+        "prefer model_mix_v2 for product UI"
     )
     return payload
 
@@ -288,6 +294,7 @@ def task_report_to_dict(
 PENDING_INFER_BUCKET = "pending-infer"
 # Legacy alias kept for test/fixture compatibility during migration.
 AUTO_OPAQUE_BUCKET = "auto-opaque"
+UNKNOWN_MIX_LABEL = "未识别"
 
 
 class CursorUsageImporter:
@@ -783,10 +790,95 @@ def _load_inferred_by_request(db: Database, task_id: str) -> Dict[str, Dict[str,
     return out
 
 
+def _load_inferred_for_tasks(
+    db: Database, task_ids: List[str]
+) -> Dict[tuple, Dict[str, Any]]:
+    """Map (task_id, request_id) -> inference for a session scope."""
+    out: Dict[tuple, Dict[str, Any]] = {}
+    for tid in task_ids:
+        for rid, info in _load_inferred_by_request(db, tid).items():
+            out[(tid, rid)] = info
+    return out
+
+
+def _mix_display_label(bucket: str) -> str:
+    if bucket in (PENDING_INFER_BUCKET, AUTO_OPAQUE_BUCKET, "unknown", ""):
+        return UNKNOWN_MIX_LABEL
+    return bucket
+
+
+def _empty_model_mix_v2() -> Dict[str, Any]:
+    return {
+        "total_calls": 0,
+        "subagent_calls": 0,
+        "confirmed_count": 0,
+        "estimated_count": 0,
+        "unknown_count": 0,
+        "composition": "confirmed_only",
+        "models": {},
+    }
+
+
+def _build_model_mix_v2(
+    *,
+    confirmed_by_model: Dict[str, int],
+    estimated_by_model: Dict[str, int],
+    unknown_count: int,
+    subagent_calls: int,
+) -> Dict[str, Any]:
+    """Unified call-count composition; confirmed/estimated only for detail folds."""
+    models: Dict[str, Dict[str, Any]] = {}
+    for m in set(confirmed_by_model) | set(estimated_by_model):
+        if m == UNKNOWN_MIX_LABEL:
+            continue
+        c = int(confirmed_by_model.get(m, 0))
+        e = int(estimated_by_model.get(m, 0))
+        models[m] = {
+            "call_count": c + e,
+            "confirmed_count": c,
+            "estimated_count": e,
+            "pct": 0.0,
+        }
+    if unknown_count > 0:
+        models[UNKNOWN_MIX_LABEL] = {
+            "call_count": unknown_count,
+            "confirmed_count": 0,
+            "estimated_count": 0,
+            "pct": 0.0,
+        }
+
+    total = sum(v["call_count"] for v in models.values()) or 0
+    denom = total or 1
+    for v in models.values():
+        v["pct"] = v["call_count"] / denom * 100.0
+
+    models_sorted = dict(
+        sorted(models.items(), key=lambda item: (-item[1]["call_count"], item[0]))
+    )
+    confirmed_total = sum(confirmed_by_model.values())
+    estimated_total = sum(estimated_by_model.values())
+    if unknown_count > 0:
+        composition = "partial"
+    elif estimated_total > 0:
+        composition = "includes_estimates"
+    else:
+        composition = "confirmed_only"
+
+    return {
+        "total_calls": confirmed_total + estimated_total + unknown_count,
+        "subagent_calls": subagent_calls,
+        "confirmed_count": confirmed_total,
+        "estimated_count": estimated_total,
+        "unknown_count": unknown_count,
+        "composition": composition,
+        "models": models_sorted,
+    }
+
+
 def aggregate_task(
     db: Database, task_id: str, *, auto_infer: bool = True
 ) -> Optional[TaskUsageReport]:
-    """聚合单任务用量报告。
+    """聚合单任务用量报告（根任务 + 一层子代理）。
 
     ``auto_infer``: 对仍有 pending-infer 的 Auto/Mixed 任务，在已训练盲测模型时
     自动写入 ``blindtest_inferences``（不修改 ``resolved_model``）。
@@ -806,32 +898,47 @@ def aggregate_task(
             return None
 
     task_id = task["task_id"]
-    if auto_infer and task.get("route_kind") in ("auto", "mixed"):
+    subagents = db.get_cursor_subagents(task_id)
+    child_ids = [s["task_id"] for s in subagents if s.get("task_id")]
+    session_task_ids = [task_id, *child_ids]
+
+    if auto_infer:
         try:
             from ai_verify.monitor.blindtest_infer import ensure_task_inferences
 
-            ensure_task_inferences(db, task_id)
+            if task.get("route_kind") in ("auto", "mixed"):
+                ensure_task_inferences(db, task_id)
+            for cid in child_ids:
+                try:
+                    ensure_task_inferences(db, cid)
+                except Exception:
+                    pass
         except Exception:
             pass
 
-    events = db.get_cursor_events_for_task(task_id)
+    events = db.get_cursor_events_for_session(task_id)
     if not events:
         return TaskUsageReport(
-            task_id=task_id, title=task.get("title"), mode=task.get("mode", "unknown")
+            task_id=task_id,
+            title=task.get("title"),
+            mode=task.get("mode", "unknown"),
+            model_mix_v2=_empty_model_mix_v2(),
         )
 
-    # per-request dedupe: pick best confidence per request_id
-    by_request: Dict[str, Dict[str, Any]] = {}
+    # Dedupe by (task_id, request_id) so child request ids cannot collide with parent.
+    by_request: Dict[tuple, Dict[str, Any]] = {}
     conf_rank = {"high": 4, "medium-high": 3, "medium": 2, "low": 1}
     for ev in events:
+        tid = ev.get("task_id") or task_id
         rid = ev.get("request_id") or ev["id"]
-        prev = by_request.get(rid)
+        key = (tid, rid)
+        prev = by_request.get(key)
         if not prev or conf_rank.get(ev.get("confidence", "low"), 0) > conf_rank.get(
             prev.get("confidence", "low"), 0
         ):
-            by_request[rid] = ev
+            by_request[key] = ev
 
-    inferred_by_req = _load_inferred_by_request(db, task_id)
+    inferred_by_key = _load_inferred_for_tasks(db, session_task_ids)
 
     request_model_counts: Dict[str, int] = defaultdict(int)
     output_model_counts: Dict[str, int] = defaultdict(int)
@@ -840,31 +947,41 @@ def aggregate_task(
     inferred_req_counts: Dict[str, int] = defaultdict(int)
     status_counts: Dict[str, int] = defaultdict(int)
     confidence_counts: Dict[str, int] = defaultdict(int)
+    mix_confirmed: Dict[str, int] = defaultdict(int)
+    mix_estimated: Dict[str, int] = defaultdict(int)
 
     per_request: List[Dict[str, Any]] = []
     resolved_requests = 0
     covered = 0
     pending_infer_count = 0
-    for rid, ev in sorted(
+    unknown_mix_count = 0
+    subagent_calls = 0
+    for (tid, rid), ev in sorted(
         by_request.items(), key=lambda x: x[1].get("timestamp") or ""
     ):
+        if tid != task_id:
+            subagent_calls += 1
         bucket = _bucket_label(ev)
         factual = _is_resolved_model(ev.get("resolved_model")) or _is_resolved_model(
             ev.get("selected_model")
         )
-        inf = inferred_by_req.get(rid)
+        inf = inferred_by_key.get((tid, rid))
         display_bucket = bucket
         if bucket == PENDING_INFER_BUCKET and inf:
             display_bucket = inf["inferred_model"]
             inferred_req_counts[display_bucket] += 1
+            mix_estimated[_mix_display_label(display_bucket)] += 1
             covered += 1
         elif factual:
             covered += 1
             factual_req_counts[bucket] += 1
+            mix_confirmed[_mix_display_label(bucket)] += 1
         elif bucket == PENDING_INFER_BUCKET:
             pending_infer_count += 1
+            unknown_mix_count += 1
         else:
             covered += 1  # unknown still "labeled" as unknown
+            unknown_mix_count += 1
 
         request_model_counts[display_bucket] += 1
         if _is_resolved_model(ev.get("resolved_model")):
@@ -879,6 +996,7 @@ def aggregate_task(
         per_request.append(
             {
                 "request_id": rid,
+                "task_id": tid,
                 "selected_model": ev.get("selected_model"),
                 "resolved_model": ev.get("resolved_model"),
                 "inferred_model": (inf or {}).get("inferred_model"),
@@ -893,10 +1011,15 @@ def aggregate_task(
         )
 
     total_requests = sum(request_model_counts.values()) or 1
-    total_output = sum(output_model_counts.values()) or 1
     resolution_rate = resolved_requests / total_requests if total_requests else 0.0
     n_req = len(by_request) or 1
     coverage = covered / n_req
+    model_mix_v2 = _build_model_mix_v2(
+        confirmed_by_model=dict(mix_confirmed),
+        estimated_by_model=dict(mix_estimated),
+        unknown_count=unknown_mix_count,
+        subagent_calls=subagent_calls,
+    )
 
     return TaskUsageReport(
         task_id=task_id,
@@ -907,7 +1030,7 @@ def aggregate_task(
         ended_at=task.get("ended_at"),
         request_count=len(by_request),
         code_unit_count=sum(output_model_counts.values()),
-        subagent_count=len(db.get_cursor_subagents(task_id)),
+        subagent_count=len(subagents),
         resolved_requests=resolved_requests,
         resolution_rate=resolution_rate,
         request_shares=_shares_from_counts(request_model_counts),
@@ -927,8 +1050,9 @@ def aggregate_task(
         pending_infer_count=pending_infer_count,
         status_counts=dict(status_counts),
         confidence_counts=dict(confidence_counts),
-        subagents=db.get_cursor_subagents(task_id),
+        subagents=subagents,
         per_request=per_request,
+        model_mix_v2=model_mix_v2,
     )
 
 
@@ -954,9 +1078,22 @@ def list_tasks(
                 title=row.get("title"),
                 mode=row.get("mode", "unknown"),
                 route_kind=row.get("route_kind", "unknown"),
-                request_count=row.get("request_count", 0),
-                code_unit_count=row.get("code_unit_count", 0),
-                subagent_count=row.get("subagent_count", 0),
+                # Prefer session-scoped count (root + one-level subagents).
+                request_count=(
+                    report.request_count
+                    if report is not None
+                    else row.get("request_count", 0)
+                ),
+                code_unit_count=(
+                    report.code_unit_count
+                    if report is not None
+                    else row.get("code_unit_count", 0)
+                ),
+                subagent_count=(
+                    report.subagent_count
+                    if report is not None
+                    else row.get("subagent_count", 0)
+                ),
                 started_at=row.get("started_at"),
                 model_request_shares=shares,
             )

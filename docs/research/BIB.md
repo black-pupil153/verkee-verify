@@ -66,6 +66,7 @@
 | D4 | 2024 | 2 | W | Instructional fingerprinting watermarks | https://arxiv.org/abs/2401.12255 | 需训练注入 |
 | D5 | 2023 | 3 | B | LLM version identification via quirks | 安全社区/博客聚合 | 知识截止、特殊 token 行为 |
 | D6 | — | 4 | A | VerAI `fingerprint.py` 渠道探针 | 仓库内 | 已有反侦测探针；可对照 LLMmap 升级 |
+| D7 | 2026 | 5 | A/B | One Token Is Enough / PAMELA（Bruckner） | https://arxiv.org/abs/2607.10252 · Zenodo [data](https://doi.org/10.5281/zenodo.21278557) / [code](https://doi.org/10.5281/zenodo.21278793) | 单 token 回答分布作行为指纹；盲测用为廉价特征通道（ROADMAP B6）；家族 LOO≈60%，验证 EER≈7% 需参考 |
 
 ---
 

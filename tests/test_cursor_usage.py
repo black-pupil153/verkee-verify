@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 
 from ai_verify.monitor.cursor_usage import (
+    UNKNOWN_MIX_LABEL,
     CursorUsageImporter,
     aggregate_task,
     merge_turn,
     parse_since,
+    task_report_to_dict,
 )
 from ai_verify.providers.cursor import CursorPaths
 from ai_verify.storage.database import Database
@@ -491,3 +493,196 @@ def test_malformed_subagent_hook_sanitized_and_not_listed(tmp_path):
     assert parent is not None
     assert parent["subagent_count"] >= 1
     assert db.get_cursor_subagents("task-parent-aaa")
+
+
+def test_model_mix_v2_confirmed_only(tmp_path):
+    db = Database(db_path=tmp_path / "ai_verify.db")
+    db.save_cursor_task(
+        {
+            "task_id": "task-mix-fact",
+            "title": "fact only",
+            "mode": "agent",
+            "route_kind": "specific",
+            "request_count": 2,
+        }
+    )
+    for i, model in enumerate(("claude-fable-5", "claude-fable-5", "grok-4.5")):
+        db.save_cursor_model_event(
+            {
+                "id": f"ev-fact-{i}",
+                "task_id": "task-mix-fact",
+                "request_id": f"req-fact-{i}",
+                "selected_model": model,
+                "resolved_model": model,
+                "route_kind": "specific",
+                "event_source": "hook",
+                "confidence": "high",
+                "generated_units": 1,
+                "status": "success",
+                "timestamp": f"2026-07-13T10:0{i}:00",
+            }
+        )
+
+    report = aggregate_task(db, "task-mix-fact", auto_infer=False)
+    assert report is not None
+    mix = report.model_mix_v2
+    assert mix["composition"] == "confirmed_only"
+    assert mix["total_calls"] == 3
+    assert mix["estimated_count"] == 0
+    assert mix["unknown_count"] == 0
+    assert mix["models"]["claude-fable-5"]["call_count"] == 2
+    assert mix["models"]["claude-fable-5"]["confirmed_count"] == 2
+    assert abs(sum(m["pct"] for m in mix["models"].values()) - 100.0) < 0.01
+
+    payload = task_report_to_dict(report)
+    assert "model_mix_v2" in payload
+    assert payload["factual_request_shares"]
+    assert "disclaimer" in payload
+
+
+def test_model_mix_v2_includes_estimates_and_unknown(tmp_path):
+    db = Database(db_path=tmp_path / "ai_verify.db")
+    db.save_cursor_task(
+        {
+            "task_id": "task-mix-est",
+            "title": "mixed",
+            "mode": "agent",
+            "route_kind": "auto",
+            "request_count": 3,
+        }
+    )
+    db.save_cursor_model_event(
+        {
+            "id": "ev-c",
+            "task_id": "task-mix-est",
+            "request_id": "req-c",
+            "selected_model": "claude-fable-5",
+            "resolved_model": "claude-fable-5",
+            "route_kind": "specific",
+            "event_source": "hook",
+            "confidence": "high",
+            "timestamp": "2026-07-13T10:00:00",
+        }
+    )
+    db.save_cursor_model_event(
+        {
+            "id": "ev-p",
+            "task_id": "task-mix-est",
+            "request_id": "req-p",
+            "selected_model": "default",
+            "resolved_model": None,
+            "route_kind": "auto",
+            "event_source": "ai_tracking_db",
+            "confidence": "low",
+            "timestamp": "2026-07-13T10:01:00",
+        }
+    )
+    db.save_blindtest_inference(
+        {
+            "task_id": "task-mix-est",
+            "turn_index": 0,
+            "request_id": "req-p",
+            "inferred_model": "claude-fable-5",
+            "probability": 0.9,
+            "model_version": "test",
+        }
+    )
+    db.save_cursor_model_event(
+        {
+            "id": "ev-u",
+            "task_id": "task-mix-est",
+            "request_id": "req-u",
+            "selected_model": "default",
+            "resolved_model": None,
+            "route_kind": "auto",
+            "event_source": "ai_tracking_db",
+            "confidence": "low",
+            "timestamp": "2026-07-13T10:02:00",
+        }
+    )
+
+    report = aggregate_task(db, "task-mix-est", auto_infer=False)
+    assert report is not None
+    mix = report.model_mix_v2
+    assert mix["composition"] == "partial"
+    assert mix["confirmed_count"] == 1
+    assert mix["estimated_count"] == 1
+    assert mix["unknown_count"] == 1
+    assert mix["models"]["claude-fable-5"]["call_count"] == 2
+    assert mix["models"]["claude-fable-5"]["confirmed_count"] == 1
+    assert mix["models"]["claude-fable-5"]["estimated_count"] == 1
+    assert mix["models"][UNKNOWN_MIX_LABEL]["call_count"] == 1
+    assert abs(sum(m["pct"] for m in mix["models"].values()) - 100.0) < 0.01
+
+
+def test_aggregate_includes_one_level_subagents(tmp_path):
+    db = Database(db_path=tmp_path / "ai_verify.db")
+    db.save_cursor_task(
+        {
+            "task_id": "task-root-mix",
+            "title": "root",
+            "mode": "agent",
+            "route_kind": "specific",
+            "request_count": 1,
+            "subagent_count": 1,
+        }
+    )
+    db.save_cursor_model_event(
+        {
+            "id": "ev-root",
+            "task_id": "task-root-mix",
+            "request_id": "req-root",
+            "resolved_model": "claude-fable-5",
+            "selected_model": "claude-fable-5",
+            "route_kind": "specific",
+            "event_source": "hook",
+            "confidence": "high",
+            "timestamp": "2026-07-13T11:00:00",
+        }
+    )
+    db.save_cursor_model_event(
+        {
+            "id": "ev-child",
+            "task_id": "sub-child-1",
+            "parent_task_id": "task-root-mix",
+            "request_id": "req-child",
+            "resolved_model": "composer-2.5-fast",
+            "selected_model": "composer-2.5-fast",
+            "route_kind": "specific",
+            "event_source": "hook",
+            "confidence": "high",
+            "timestamp": "2026-07-13T11:01:00",
+        }
+    )
+    # Same request_id on child must not collide with a different parent request.
+    db.save_cursor_model_event(
+        {
+            "id": "ev-child-2",
+            "task_id": "sub-child-1",
+            "parent_task_id": "task-root-mix",
+            "request_id": "req-root",
+            "resolved_model": "grok-4.5",
+            "selected_model": "grok-4.5",
+            "route_kind": "specific",
+            "event_source": "hook",
+            "confidence": "high",
+            "timestamp": "2026-07-13T11:02:00",
+        }
+    )
+
+    report = aggregate_task(db, "task-root-mix", auto_infer=False)
+    assert report is not None
+    assert report.request_count == 3
+    assert report.model_mix_v2["subagent_calls"] == 2
+    assert report.model_mix_v2["total_calls"] == 3
+    assert set(report.model_mix_v2["models"]) == {
+        "claude-fable-5",
+        "composer-2.5-fast",
+        "grok-4.5",
+    }
+
+    from ai_verify.monitor.cursor_usage import list_tasks
+
+    summaries = list_tasks(db, limit=5)
+    root = next(s for s in summaries if s.task_id == "task-root-mix")
+    assert root.request_count == 3

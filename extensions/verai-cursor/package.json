@@ -1,7 +1,7 @@
 {
   "name": "verai-cursor",
   "displayName": "VerAI Session Usage",
-  "description": "See factual vs inferred model shares for the current Cursor session (local-only).",
+  "description": "See which models this Cursor session mostly used (local-only; unified call mix).",
   "version": "0.1.0",
   "publisher": "verai",
   "license": "MIT",

@@ -1,24 +1,26 @@
 # VerAI 产品化与增长路线图
 
-> 更新日期：2026-07-16  
-> 决策锁定：插件形态 **1A**（侧边栏 Webview）· 带宽 **2B**（插件 MVP ∥ GT/盲测加固）
+> 更新日期：2026-07-21  
+> 决策锁定：插件形态 **1A**（侧边栏 Webview）· 主线 **A4 软发布 → closed alpha**；Track B 反馈触发（含 B6 单 token 分布特征）
 
 ## 一句话目标
 
-把「CLI 里能算清会话模型占比」做成 **Cursor 侧边栏每天能点开看** 的产品，同时把盲测从脆弱小样本推成可汇报区间；用本地优先 + 反馈驱动做软发布与增长。
+把「CLI 里能算清会话模型占比」做成 **Cursor 侧边栏每天能点开看** 的产品；默认只回答「这次会话主要用了哪些模型」。盲测/GT 改为反馈触发的后台能力。
 
 ## 决策（已锁定）
 
 | 项 | 选择 | 说明 |
 |----|------|------|
 | 插件形态 | Cursor/VS Code **侧边栏 Webview** | 公开 API 不支持 Composer 会话内嵌 Tab；侧边栏是可交付替代 |
-| 带宽 | 4–6 周 **并行** | Track A（插件）与 Track B（GT）约各一半 |
-| 数据原则 | 不变 | 事实/推断分轨；推断不写 `resolved_model`；本地优先、正文不上传 |
+| 产品主视图 | **统一调用次数构成** | 确认/估算仅进折叠细则；产出权重退出主视图 |
+| 会话范围 | 根任务 + **一层子代理** | 列表 `request_count` 与详情同口径 |
+| 数据原则 | 不变 | 推断不写 `resolved_model`；本地优先、正文不上传；JSON 保留旧分轨字段 |
+| Track B | **反馈触发** | 仅当 alpha 连续出现估算不准/未知过高时再开 |
 
 ## 现状可复用资产
 
-- 单任务占比：`aggregate_task` → `factual_*` / `inferred_*` / `coverage` / `output_shares`
-- CLI：`cursor task` / `tasks` / `board` / `hooks`；已补 `doctor|tasks|task --json`
+- 单任务占比：`aggregate_task` → **`model_mix_v2`**（产品默认）+ 旧 `factual_*` / `inferred_*` / `coverage` / `output_shares`
+- CLI：`cursor task` 人读默认统一构成；`--verbose` 看分轨；`--json` 双契约
 - 盲评：`cheap-gt-v3` Acc@forced **53.1%**（n=32）；B3 近亲门控 MVP（`near_margin=0.12`）；`cheap-gt-v2` 曾 **78.6%**（n=14，短会话）
 - 通道消融（同 split）：见 `PROJECT_STATUS.md`；**+latency** 抬升明显
 
@@ -36,7 +38,9 @@ flowchart TB
     Ablate[Ablate_cheap_gt_v2]
     DiverseGT[Diverse_real_sessions]
     Metrics[Honest_metrics]
+    SingleTok[B6_single_token_dist]
     Ablate --> DiverseGT --> Metrics
+    Metrics --> SingleTok
   end
   subgraph trackC [TrackC_GTM]
     SoftLaunch[Soft_launch_VSIX]
@@ -55,7 +59,7 @@ flowchart TB
 
 ### A0. 定位文案
 
-> VerAI：看清**这个会话**里各模型实际占比（事实 vs 推断），本地计算、不上传对话正文。
+> VerAI：看清**这个会话主要用了哪些模型**（本地计算，不上传对话正文）。
 
 ### A1. 仓库结构
 
@@ -63,7 +67,7 @@ flowchart TB
 
 - Activity Bar + `verai.sessionView` WebviewViewProvider
 - `bridge` 调本机 `ai-verify … --json`
-- 面板：会话选择器 + 事实/推断占比 + coverage
+- 面板：会话选择器 + **统一模型构成** + 折叠来源细则
 
 首版 **100% 本地**，无云端账号。
 
@@ -73,27 +77,37 @@ flowchart TB
 |------|------|------|
 | `ai-verify cursor doctor --json` | 插件首屏健康检查 | ✅ |
 | `ai-verify cursor tasks --json --limit N` | 最近会话列表 | ✅ |
-| `ai-verify cursor task [--latest\|id] --json` | 单会话报告 | ✅ |
+| `ai-verify cursor task [--latest\|id] --json` | 单会话报告（含 `model_mix_v2`） | ✅ |
 | 插件内静默 `cursor import --since 1d` | 刷新数据 | ✅（扩展 refresh / ready） |
 
-### A3. 面板 UX ✅（dogfood）
+### A3. 面板 UX ✅（dogfood，分轨版）
 
 1. 会话选择器（最近 N；默认 latest；手动刷新）✅
-2. 模型占比堆叠条 + 表（事实 / 推断分轨；`pending-infer` 标注）✅
+2. 模型占比堆叠条 + 表（事实 / 推断分轨；`pending-infer` 标注）✅（已被 A3.1/A3.2 取代为默认叙事）
 3. 可信度一行：`coverage` +「推断≠官方真名」✅
 
-### A4. 安装路径（软发布）
+### A3.1 / A3.2. 理解性重构 ✅
+
+1. **A3.1** `model_mix_v2` + CLI 人读默认统一构成（`--verbose` 看分轨）✅
+2. **A3.2** 会话含一层子代理；侧边栏单一构成条 + 条件提示 + 折叠「这是怎么判断的？」✅
+3. 默认屏无「事实轨/推断轨/coverage/pending-infer/已确认 N 次」✅
+4. 明确不做：饼图、产出权重主视图、侧边栏逐 turn、token/cost
+
+### A4. 安装路径（软发布 · 当前主线）
 
 1. `vsce package` → `.vsix`，文档写 Install from VSIX ✅（`npm run package`）
 2. 依赖本机 `ai-verify` 在 PATH；doctor 失败给修复步骤 ✅（含 Open Settings）
 3. 可选提示 `cursor hooks install`（软发布时补强）
+4. GitHub Release 挂 VSIX + 一页安装说明（待做）
 
-**验收**：侧边栏打开 → 选最近会话 → 10 秒内看到占比，与 CLI 数字一致。  
-本机：`cd extensions/verai-cursor && npm run accept`（bridge ≡ `cursor task --json`）。
+**验收**：侧边栏打开 → 选最近会话 → **5 秒内**看懂谁用得最多；与 CLI `model_mix_v2` 数字一致。  
+本机：`VERAI_AI_VERIFY_PATH=../../venv/bin/ai-verify npm run accept`（bridge ≡ `cursor task --json`，含 `model_mix_v2`）。
+
+**节奏**：A3.1/A3.2 ✅ → **A4 软发布** → closed alpha（约 5 人）。
 
 ---
 
-## Track B — GT / 盲测加固
+## Track B — GT / 盲测加固（反馈触发，非当前主线）
 
 | 项 | 动作 | 成功标准 | 状态 |
 |----|------|----------|------|
@@ -102,8 +116,29 @@ flowchart TB
 | B3 | 专治 sol↔terra / fable→composer | 近亲混淆下降 | ✅ 近亲门控 MVP（见 PROJECT_STATUS） |
 | B4 | `eval-auto` 扩量；面板与 CLI 对齐 | 指标写回 PROJECT_STATUS | 部分（limit=20 已记） |
 | B5 | 对外只报 forced/selective + n | 勿混 LOCO-CV | 纪律已立 |
+| B6 | 单 token 输出分布特征（PAMELA） | 见下节 | 📋 已立项，未开工 |
 
 微调 / sentence-transformers：**后置**到隐藏 test 平台期。
+
+### B6. 单 token 分布特征（盲测通道，非验真替代）
+
+> 依据：Bruckner, *One Token Is Enough*（arXiv:2607.10252）；开源 **PAMELA**（Zenodo [21278793](https://doi.org/10.5281/zenodo.21278793) / 数据 [21278557](https://doi.org/10.5281/zenodo.21278557)）。
+
+**定位**：加强根本能力——隐藏真名时估计 `P(model | features)`。把「随机数 / 颜色 / 硬币」等日常问句的**单 token 回答经验分布**作为一维超便宜主动特征，并入盲测特征栈；**不**替代 text/code/latency，也**不**单独承诺精确到 checkpoint。
+
+**不做的理解**：
+- 不是「有官方参考才验真」的主路径；家族近邻 / 候选集打分才是盲测用法
+- 不把分布指纹写入 Auto 的 `resolved_model`（动态路由破坏单一指纹假设）
+- 不重跑 165 模型 OpenRouter 普查；先服务 VerAI 闭集（cheap 类 / 用户渠道常见模型）
+
+| 子项 | 动作 | 成功标准 |
+|------|------|----------|
+| B6.1 | `monitor/` 或 `blindtest/` 增加分布采集：中英优先子集（~4–8 cells），T=1、`max_tokens` 小、归一化答案 | 单模型 enrollment ≤ 百次单 token；结果可复现落盘 |
+| B6.2 | 特征：cell 直方图 / top-k mass / 对参考库的 JSD 向量；接入 `train`/`eval` 通道（如 `single_token`） | `ablate` 可单独开闭该通道 |
+| B6.3 | 闭集参考库：对手选 GT 模型采分布先验；可选冷启动消费 Zenodo 公开分布 | 隐藏 test 上相对 text-only 有可测增益，或证明无增益后降级 |
+| B6.4 | 渠道侧复用：`check`/`score` 可用同一探针作辅证据；风格关键词启发式降级为 soft hint | 文档区分「盲测特征」vs「声称匹配」 |
+
+**触发条件**（与 Track B 一致）：alpha「不准 / 未知过高」反馈，或主动点名开工；**不抢 A4 / Track C 主线**。
 
 ---
 

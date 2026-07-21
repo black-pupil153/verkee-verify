@@ -525,6 +525,24 @@ class Database:
             rows = conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
 
+    def get_cursor_events_for_session(
+        self, root_task_id: str, since: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Root-task events ∪ one-level child events (parent_task_id = root)."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            query = (
+                "SELECT * FROM cursor_model_events "
+                "WHERE task_id = ? OR parent_task_id = ?"
+            )
+            params: List[Any] = [root_task_id, root_task_id]
+            if since:
+                query += " AND COALESCE(timestamp, '') >= ?"
+                params.append(since)
+            query += " ORDER BY timestamp ASC"
+            rows = conn.execute(query, params).fetchall()
+            return [dict(row) for row in rows]
+
     def get_cursor_subagents(self, parent_task_id: str) -> List[Dict[str, Any]]:
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row

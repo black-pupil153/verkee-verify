@@ -164,7 +164,7 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
 <body>
   <header>
     <h1>VerAI</h1>
-    <p class="tagline">这个会话里各模型实际占比（事实 vs 推断）· 本地计算</p>
+    <p class="tagline">看清这个会话主要用了哪些模型 · 本地计算</p>
     <button id="refresh" type="button">Refresh</button>
   </header>
   <section id="status" class="muted">Loading…</section>

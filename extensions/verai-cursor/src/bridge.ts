@@ -58,6 +58,23 @@ export type TaskListPayload = {
   }>;
 };
 
+export type ModelMixV2Entry = {
+  call_count: number;
+  pct: number;
+  confirmed_count: number;
+  estimated_count: number;
+};
+
+export type ModelMixV2 = {
+  total_calls: number;
+  subagent_calls: number;
+  confirmed_count: number;
+  estimated_count: number;
+  unknown_count: number;
+  composition: "confirmed_only" | "includes_estimates" | "partial";
+  models: Record<string, ModelMixV2Entry>;
+};
+
 export type TaskReportPayload = {
   task_id: string;
   title?: string | null;
@@ -71,6 +88,8 @@ export type TaskReportPayload = {
   inferred_request_shares: Record<string, { pct: number; count: number }>;
   factual_output_shares: Record<string, { pct: number; count: number }>;
   output_shares: Record<string, { pct: number; count: number }>;
+  /** Preferred product contract; extension falls back to dual-track shares if absent. */
+  model_mix_v2?: ModelMixV2;
   disclaimer?: string;
   error?: string;
 };

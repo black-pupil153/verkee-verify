@@ -37,6 +37,27 @@ function shareFingerprint(shares) {
   return JSON.stringify(entries);
 }
 
+function mixFingerprint(mix) {
+  const models = Object.entries((mix && mix.models) || {})
+    .map(([model, info]) => [
+      model,
+      Number(info.call_count),
+      Number(info.pct),
+      Number(info.confirmed_count),
+      Number(info.estimated_count),
+    ])
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  return JSON.stringify({
+    total_calls: Number(mix && mix.total_calls),
+    subagent_calls: Number(mix && mix.subagent_calls),
+    confirmed_count: Number(mix && mix.confirmed_count),
+    estimated_count: Number(mix && mix.estimated_count),
+    unknown_count: Number(mix && mix.unknown_count),
+    composition: mix && mix.composition,
+    models,
+  });
+}
+
 test("sidebar parity: bridge task ≡ cursor task --json (<10s)", async (t) => {
   const cli = resolveCli();
   if (!(await cliAvailable(cli))) {
@@ -73,8 +94,19 @@ test("sidebar parity: bridge task ≡ cursor task --json (<10s)", async (t) => {
   const elapsedMs = Date.now() - started;
 
   assert.equal(viaBridge.task_id, viaCli.task_id);
+  assert.equal(viaBridge.request_count, viaCli.request_count);
   assert.equal(viaBridge.coverage, viaCli.coverage);
   assert.equal(viaBridge.pending_infer_count, viaCli.pending_infer_count);
+  assert.ok(viaBridge.model_mix_v2, "bridge must expose model_mix_v2");
+  assert.ok(viaCli.model_mix_v2, "CLI must expose model_mix_v2");
+  assert.equal(
+    mixFingerprint(viaBridge.model_mix_v2),
+    mixFingerprint(viaCli.model_mix_v2)
+  );
+  assert.equal(
+    Number(viaBridge.model_mix_v2.total_calls),
+    Number(viaBridge.request_count)
+  );
   assert.equal(
     shareFingerprint(viaBridge.factual_request_shares),
     shareFingerprint(viaCli.factual_request_shares)

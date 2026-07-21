@@ -1,6 +1,6 @@
 # VerAI Cursor Extension
 
-侧边栏 Webview：查看**当前/最近会话**的模型占比（事实轨 vs 推断轨）。本地调用 `ai-verify … --json`，不上传对话正文。
+侧边栏 Webview：看清**当前/最近会话主要用了哪些模型**（统一调用次数构成）。本地调用 `ai-verify … --json`，不上传对话正文。确认/估算拆分在折叠细则里，不占默认主视图。
 
 > Cursor 无公开「Composer 会话内嵌 Tab」API；本扩展是产品化首发形态（见 [`docs/ROADMAP.md`](../../docs/ROADMAP.md)）。
 
@@ -55,28 +55,23 @@ ai-verify cursor import --since 7d
 ai-verify cursor task --latest --json
 ```
 
-随后打开 VerAI 侧边栏。正常情况下 10 秒内应看到最近会话、事实/推断占比
-和 coverage。若没有数据，面板会显示正常空状态；若 CLI、PATH 或 JSON 契约
-异常，面板会给出对应修复提示。
+随后打开 VerAI 侧边栏。正常情况下 5 秒内应看懂「哪个模型用得最多」。
+若没有数据，面板会显示正常空状态；若 CLI、PATH 或 JSON 契约异常，面板会
+给出对应修复提示。
 
 ## 验收：面板与 CLI 一致
 
-1. 在侧边栏选择最近会话并记录 task id、coverage 和各模型占比。
+1. 在侧边栏选择最近会话并记录各模型调用占比。
 2. 在终端运行：
 
    ```bash
    ai-verify cursor task --latest --json
    ```
 
-3. 对照以下字段：
+3. 优先对照 `model_mix_v2`（`total_calls`、各模型 `call_count` / `pct`）。
+   旧字段 `factual_*` / `inferred_*` / `coverage` 仍会返回，供诊断与兼容。
 
-   - `factual_request_shares`
-   - `inferred_request_shares`
-   - `factual_output_shares` / `output_shares`
-   - `coverage`
-   - `pending_infer_count`
-
-显示取整可能不同，但底层比例与计数必须一致。推断轨不应写入事实轨，也不能
+显示取整可能不同，但底层比例与计数必须一致。估算不得伪装成已确认，也不能
 被描述成 Cursor 官方逐步模型真名。
 
 ## 故障排查
@@ -118,4 +113,4 @@ inferred_*；预算 10 秒。
 
 - 只读本机 `~/.ai-verify` 与 Cursor 遥测元数据
 - 面板不展示 prompt/response 正文
-- 推断轨带 disclaimer，不得当作官方逐步真名
+- 估算来源仅在折叠细则中展示，不得当作官方逐步真名

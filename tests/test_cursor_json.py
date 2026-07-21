@@ -72,12 +72,30 @@ def test_task_report_to_dict_omits_per_request_by_default():
         coverage=0.75,
         pending_infer_count=1,
         factual_request_shares={"grok-4.5": {"pct": 100.0, "count": 2}},
+        model_mix_v2={
+            "total_calls": 2,
+            "subagent_calls": 0,
+            "confirmed_count": 2,
+            "estimated_count": 0,
+            "unknown_count": 0,
+            "composition": "confirmed_only",
+            "models": {
+                "grok-4.5": {
+                    "call_count": 2,
+                    "confirmed_count": 2,
+                    "estimated_count": 0,
+                    "pct": 100.0,
+                }
+            },
+        },
         per_request=[{"request_id": "r1"}],
     )
     slim = task_report_to_dict(report)
     assert "per_request" not in slim
     assert slim["coverage"] == 0.75
     assert "disclaimer" in slim
+    assert slim["model_mix_v2"]["total_calls"] == 2
+    assert slim["factual_request_shares"]["grok-4.5"]["count"] == 2
 
     full = task_report_to_dict(report, include_per_request=True)
     assert full["per_request"] == [{"request_id": "r1"}]
@@ -139,6 +157,19 @@ def test_cursor_tasks_and_task_json(tmp_path, monkeypatch):
     assert report["task_id"] == "task-json-1"
     assert "disclaimer" in report
     assert "per_request" not in report
+    assert "model_mix_v2" in report
+    assert report["model_mix_v2"]["total_calls"] >= 1
+
+    human = runner.invoke(cursor_task, ["task-json-1"])
+    assert human.exit_code == 0, human.output
+    assert "本会话模型构成" in human.output
+    assert "事实轨" not in human.output
+    assert "推断轨" not in human.output
+
+    verbose = runner.invoke(cursor_task, ["task-json-1", "--verbose"])
+    assert verbose.exit_code == 0, verbose.output
+    # verbose may still omit empty tracks; header path is enough
+    assert "本会话模型构成" in verbose.output
 
 
 def test_cursor_doctor_json(monkeypatch):

@@ -62,5 +62,33 @@ export const taskReportContract = {
   inferred_request_shares: { composer: { pct: 50, count: 1 } },
   factual_output_shares: { "claude-sonnet": { pct: 60, count: 120 } },
   output_shares: { "claude-sonnet": { pct: 60, count: 120 } },
+  model_mix_v2: {
+    total_calls: 3,
+    subagent_calls: 0,
+    confirmed_count: 1,
+    estimated_count: 1,
+    unknown_count: 1,
+    composition: "partial",
+    models: {
+      "claude-sonnet": {
+        call_count: 1,
+        pct: 33.33333333333333,
+        confirmed_count: 1,
+        estimated_count: 0,
+      },
+      composer: {
+        call_count: 1,
+        pct: 33.33333333333333,
+        confirmed_count: 0,
+        estimated_count: 1,
+      },
+      未识别: {
+        call_count: 1,
+        pct: 33.33333333333333,
+        confirmed_count: 0,
+        estimated_count: 0,
+      },
+    },
+  },
   disclaimer: "Inference is not provider truth.",
 } satisfies TaskReportPayload;

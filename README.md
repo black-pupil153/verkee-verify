@@ -1,12 +1,18 @@
+<p align="center">
+  <img src="brand/social/github-og-1280x640.png" alt="VerAI — See which models this Cursor session used" width="920" />
+</p>
+
+<p align="center">
+  <img src="brand/logo/verai-lockup.svg" alt="VerAI" width="280" />
+</p>
+
 # VerAI
 
-> AI 渠道验真 / AI 消费验真器  
-> 读作 **ver-eye** · CLI 与包名仍为 `ai-verify`（兼容不改）
+> **VerAI（读 ver-eye）**：本地看清 Cursor 这次会话主要用了哪些模型。不上传对话正文。
 
-你付费买到的模型，到底是不是它、值不值——应当有可追溯的证据。  
-VerAI 以**被动监控为主、主动探测为辅**，检测中转站偷换模型、质量下滑、官方模型降智，并可选透视 Cursor Auto 实际路由了哪些模型。
+同一仓库也保留 AI 渠道验真能力：以**被动监控为主、主动探测为辅**，检测中转站偷换模型、质量下滑与官方模型降智。
 
-仓库：<https://github.com/black-pupil153/VerAI>
+仓库：<https://github.com/black-pupil153/VerAI> · 侧边栏软发布：[v0.1.0-sidebar](https://github.com/black-pupil153/VerAI/releases/tag/v0.1.0-sidebar)
 
 ## 核心能力
 

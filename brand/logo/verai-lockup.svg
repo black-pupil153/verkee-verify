@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 424 112" role="img" aria-labelledby="title">
+  <title id="title">VerAI — see which models this session used</title>
+  <g transform="translate(8 8)">
+    <path d="M12 48C28 23 52 10 80 10s52 13 68 38c-16 25-40 38-68 38S28 73 12 48Z" fill="none" stroke="#111820" stroke-width="10" stroke-linejoin="round"/>
+    <path d="m51 43 24 27 38-49" fill="none" stroke="#62C8BC" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="184" y="79" fill="#111820" font-family="Inter, SF Pro Display, Segoe UI, Arial, sans-serif" font-size="72" font-weight="700" letter-spacing="-3">Ver<tspan fill="#62C8BC">AI</tspan></text>
+</svg>

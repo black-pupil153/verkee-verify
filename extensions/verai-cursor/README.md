@@ -1,6 +1,12 @@
+<p align="center">
+  <img src="media/app-icon-128.png" alt="VerAI" width="96" />
+</p>
+
 # VerAI Cursor Extension
 
-侧边栏 Webview：看清**当前/最近会话主要用了哪些模型**（统一调用次数构成）。本地调用 `ai-verify … --json`，不上传对话正文。确认/估算拆分在折叠细则里，不占默认主视图。
+**VerAI（读 ver-eye）**：本地看清 Cursor 这次会话主要用了哪些模型。不上传对话正文。
+
+侧边栏展示当前/最近会话的统一调用次数构成；确认/估算拆分在折叠细则里，不占默认主视图。
 
 > Cursor 无公开「Composer 会话内嵌 Tab」API；本扩展是产品化首发形态（见 [`docs/ROADMAP.md`](../../docs/ROADMAP.md)）。
 

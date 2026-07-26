@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "publisher": "verai",
   "license": "MIT",
+  "icon": "media/app-icon-128.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/black-pupil153/VerAI.git",

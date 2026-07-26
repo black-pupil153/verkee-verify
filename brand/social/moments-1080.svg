@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" role="img" aria-labelledby="title desc">
+  <title id="title">VerAI 内测招募</title>
+  <desc id="desc">看清这次 Cursor 会话用了哪些模型。本地计算，不上传正文。</desc>
+  <rect width="1080" height="1080" fill="#111820"/>
+  <rect width="1080" height="12" fill="#62C8BC"/>
+  <g transform="translate(76 70) scale(.48)" fill="none">
+    <path d="M12 48C28 23 52 10 80 10s52 13 68 38c-16 25-40 38-68 38S28 73 12 48Z" stroke="#E7EFEE" stroke-width="10" stroke-linejoin="round"/>
+    <path d="m51 43 24 27 38-49" stroke="#62C8BC" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="168" y="124" fill="#E7EFEE" font-family="Inter, SF Pro Display, Segoe UI, Arial, sans-serif" font-size="58" font-weight="700" letter-spacing="-2">Ver<tspan fill="#62C8BC">AI</tspan></text>
+  <text x="1000" y="112" fill="#82908F" text-anchor="end" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="18" letter-spacing="2">LOCAL / VER-EYE</text>
+  <text x="76" y="314" fill="#E7EFEE" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif" font-size="70" font-weight="650" letter-spacing="-2">
+    <tspan x="76" dy="0">看清这次 Cursor</tspan>
+    <tspan x="76" dy="100">会话用了哪些模型</tspan>
+  </text>
+  <text x="80" y="528" fill="#9EACAA" font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif" font-size="30" font-weight="500">本地计算 · 不上传正文 · 内测招募</text>
+  <line x1="80" y1="590" x2="1000" y2="590" stroke="#2D3A3E" stroke-width="2"/>
+  <text x="80" y="650" fill="#62C8BC" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="18" letter-spacing="2">CURSOR SESSION MODEL MIX</text>
+  <g transform="translate(590 640) scale(2.45)" fill="none" opacity=".96">
+    <path d="M12 48C28 23 52 10 80 10s52 13 68 38c-16 25-40 38-68 38S28 73 12 48Z" stroke="#E7EFEE" stroke-width="8" stroke-linejoin="round"/>
+    <path d="m51 43 24 27 38-49" stroke="#62C8BC" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g fill="#62C8BC">
+    <rect x="82" y="744" width="56" height="72" rx="4" opacity=".35"/>
+    <rect x="154" y="704" width="56" height="112" rx="4" opacity=".62"/>
+    <rect x="226" y="654" width="56" height="162" rx="4"/>
+  </g>
+</svg>

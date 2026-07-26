@@ -1,7 +1,7 @@
 """指纹识别模块测试"""
 
-from verkeep_verify.monitor.fingerprint import FingerprintDetector
-from verkeep_verify.monitor.probes import get_probe_pool
+from verkee_verify.monitor.fingerprint import FingerprintDetector
+from verkee_verify.monitor.probes import get_probe_pool
 
 
 def test_probe_pool_is_large_and_bilingual():

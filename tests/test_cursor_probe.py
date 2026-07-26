@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-from verkeep_verify.cursor_probe import discover_probe_log_files, run_probe
-from verkeep_verify.providers.cursor import CursorPaths
+from verkee_verify.cursor_probe import discover_probe_log_files, run_probe
+from verkee_verify.providers.cursor import CursorPaths
 
 
 def test_discover_probe_log_files(tmp_path):

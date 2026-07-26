@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from verkeep_verify.monitor.cursor_usage import (
+from verkee_verify.monitor.cursor_usage import (
     CursorUsageImporter,
     aggregate_period,
     cursor_usage_insights,
@@ -14,9 +14,9 @@ from verkeep_verify.monitor.cursor_usage import (
     period_to_since,
     render_task_score_table,
 )
-from verkeep_verify.providers.cursor import CursorPaths
-from verkeep_verify.report import load_cursor_period, render_cursor_section
-from verkeep_verify.storage.database import Database
+from verkee_verify.providers.cursor import CursorPaths
+from verkee_verify.report import load_cursor_period, render_cursor_section
+from verkee_verify.storage.database import Database
 
 FIXTURE_LOG = Path(__file__).parent / "fixtures" / "cursor" / "structured_log_sample.log"
 
@@ -70,7 +70,7 @@ def test_period_to_since():
 
 
 def test_cursor_usage_insights_detects_divergence():
-    from verkeep_verify.monitor.cursor_usage import PeriodUsageReport
+    from verkee_verify.monitor.cursor_usage import PeriodUsageReport
 
     period = PeriodUsageReport(
         since_label="7d",
@@ -104,7 +104,7 @@ def test_render_cursor_section(cursor_env, monkeypatch):
     importer.import_all(since=datetime.now() - timedelta(days=30), full=True)
 
     monkeypatch.setattr(
-        "verkeep_verify.report.load_cursor_period",
+        "verkee_verify.report.load_cursor_period",
         lambda period, db=None, refresh=True, limit=50: aggregate_period(
             db or Database(db_path=db.db_path),
             since=datetime.now() - timedelta(days=30),
@@ -118,7 +118,7 @@ def test_render_task_score_table(cursor_env):
     paths, db = cursor_env
     importer = CursorUsageImporter(db=db, paths=paths)
     importer.import_all(since=datetime.now() - timedelta(days=30), full=True)
-    from verkeep_verify.monitor.cursor_usage import aggregate_task
+    from verkee_verify.monitor.cursor_usage import aggregate_task
 
     report = aggregate_task(db, "task-906dea0f")
     table = render_task_score_table(report, db)

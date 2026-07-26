@@ -4,21 +4,21 @@
 
 ## 给 alpha 的安装步骤（复制即可）
 
-1. 安装本机 CLI（仓库 `pip install -e .`，保证 `verkeep-verify` 在 PATH）
+1. 安装本机 CLI（仓库 `pip install -e .`，保证 `verkee-verify` 在 PATH）
 2. 从 Release 下载 `verai-cursor-0.1.0.vsix` → Cursor **Install from VSIX…**
-3. `verkeep-verify cursor doctor` 应为可工作状态（允许 warnings）
-4. `verkeep-verify cursor import --since 7d`
-5. 可选：`verkeep-verify cursor hooks install`
+3. `verkee-verify cursor doctor` 应为可工作状态（允许 warnings）
+4. `verkee-verify cursor import --since 7d`
+5. 可选：`verkee-verify cursor hooks install`
 6. Activity Bar → **VerAI** → 选最近会话
 
-对照：`verkeep-verify cursor task --latest` 与面板占比一致（读 `model_mix_v2`）。
+对照：`verkee-verify cursor task --latest` 与面板占比一致（读 `model_mix_v2`）。
 
 ## 问卷（两问即可）
 
 1. 打开侧边栏后，是否 **5 秒内**看懂「哪个模型用得最多」？（是 / 否 + 一句原因）
 2. 看到「部分结果为估算」或「未识别」时，是否仍信任展示？（信任 / 半信 / 不信任 + 一句）
 
-可选反馈落盘（本机、默认不上报）：`~/.verkeep/verify/feedback.jsonl`。
+可选反馈落盘（本机、默认不上报）：`~/.verkee/verify/feedback.jsonl`。
 
 ## 我们收集什么
 

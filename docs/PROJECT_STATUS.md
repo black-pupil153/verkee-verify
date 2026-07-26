@@ -10,16 +10,16 @@ VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲�
 ## 仓库与运行状态
 
 - GitHub：<https://github.com/black-pupil153/VerAI>
-- 本地仓库根目录：`/Users/gelion/code/alibaba/verkeep-verify`
+- 本地仓库根目录：`/Users/gelion/code/alibaba/verkee-verify`
 - 分支：本地 `a3-sidebar-dogfood`（自 `leo24yuyu/app-12-…`；含 APP-12 + B3 + A3 dogfood）
-- 本地语料/模型在 `~/.verkeep/verify/blindtest/`（不入 git）；split registry / sealed labels / runs 亦在此目录。
+- 本地语料/模型在 `~/.verkee/verify/blindtest/`（不入 git）；split registry / sealed labels / runs 亦在此目录。
 - `venv/`、`.pytest_cache/`、`.ruff_cache/`、本地数据库和日志均已忽略，测试夹具 `tests/fixtures/**/*.log` 与脱敏 `*.ndjson` 是特意纳入 Git 的例外。
 
 ## 产品判断
 
 - 对用户的主承诺不是“做一次 AI 盲测”，而是“我付费买到的模型到底是不是它、值不值”。盲测、指纹和趋势比较是实现证据的手段。
 - **最根本能力是模型盲测**：隐藏真名时估计 `P(model | turn_features)`；看板是展示层，不是能力本身。
-- `AI Verify` / `verkeep-verify` 仍是现有包名与 CLI 名；对外仓库名为 `VerAI`，读作 `ver-eye`。不要在没有兼容迁移方案的前提下批量改包名或命令名。
+- `AI Verify` / `verkee-verify` 仍是现有包名与 CLI 名；对外仓库名为 `VerAI`，读作 `ver-eye`。不要在没有兼容迁移方案的前提下批量改包名或命令名。
 - Cursor Auto 是可选叙事：回答“Cursor 在这个任务里实际路由了哪些模型、各占多少”，用来补充渠道验真的价值，而不替代它。
 
 ## 已实现能力
@@ -29,28 +29,28 @@ VerAI 渠道验真 + Cursor Auto Usage MVP + Auto 全量透视 + Phase 1/2 盲�
 - OpenAI、Anthropic、GLM 及 OpenAI 兼容渠道配置。
 - 被动透明代理、SSE 转发、调用记录、异常和报警。
 - 主动 `check`、质量题、探针、指纹、`score` 看板、定时巡检和报告。
-- CC Switch 当前供应商读取与 `verkeep-verify run -- <command>` 包装。
+- CC Switch 当前供应商读取与 `verkee-verify run -- <command>` 包装。
 
 ### Cursor Auto Usage
 
 以下命令和对应模块已经存在，不能按旧规划重复创建：
 
 ```bash
-verkeep-verify cursor doctor
-verkeep-verify cursor import --since 30d
-verkeep-verify cursor tasks --limit 5
-verkeep-verify cursor task --latest
-verkeep-verify cursor board --watch
-verkeep-verify cursor report --period weekly
-verkeep-verify cursor hooks install
-verkeep-verify cursor probe
-verkeep-verify cursor recommend
+verkee-verify cursor doctor
+verkee-verify cursor import --since 30d
+verkee-verify cursor tasks --limit 5
+verkee-verify cursor task --latest
+verkee-verify cursor board --watch
+verkee-verify cursor report --period weekly
+verkee-verify cursor hooks install
+verkee-verify cursor probe
+verkee-verify cursor recommend
 ```
 
-- 路径发现与 Cursor schema 诊断：`verkeep_verify/providers/cursor.py`
-- structured / renderer log 解析：`verkeep_verify/cursor_logs.py`
-- 导入、去重、证据合并、任务与周期聚合：`verkeep_verify/monitor/cursor_usage.py`
-- hook ID 清洗：`verkeep_verify.cursor_hook_events.normalize_cursor_id`
+- 路径发现与 Cursor schema 诊断：`verkee_verify/providers/cursor.py`
+- structured / renderer log 解析：`verkee_verify/cursor_logs.py`
+- 导入、去重、证据合并、任务与周期聚合：`verkee_verify/monitor/cursor_usage.py`
+- hook ID 清洗：`verkee_verify.cursor_hook_events.normalize_cursor_id`
 - 看板、报告、hooks、盲测视图和模型建议均已有实现与对应测试。
 
 `docs/CURSOR_AUTO_USAGE.md` 已更新为「已实现并完成本机验收」；仍可作为数据源、置信度和隐私边界的设计依据。
@@ -58,15 +58,15 @@ verkeep-verify cursor recommend
 ### 盲测 Phase 1（盲评基建）
 
 ```bash
-verkeep-verify blindtest build-corpus --since 30d
-verkeep-verify blindtest split --name default --seed 42 --ratios 0.6,0.2,0.2
-verkeep-verify blindtest train --split default
-verkeep-verify blindtest eval --split default --forced
-verkeep-verify blindtest eval --split default --tau 0.7 --sweep
+verkee-verify blindtest build-corpus --since 30d
+verkee-verify blindtest split --name default --seed 42 --ratios 0.6,0.2,0.2
+verkee-verify blindtest train --split default
+verkee-verify blindtest eval --split default --forced
+verkee-verify blindtest eval --split default --tau 0.7 --sweep
 ```
 
-- `verkeep_verify/blindtest/splits.py` — 按 conversation_id 的 train/val/test registry + 密封标签
-- `verkeep_verify/blindtest/eval.py` — Acc@forced / Acc@τ / τ sweep / macro-F1 / ECE / Brier；Auto 弱验证；通道消融；runs 落盘
+- `verkee_verify/blindtest/splits.py` — 按 conversation_id 的 train/val/test registry + 密封标签
+- `verkee_verify/blindtest/eval.py` — Acc@forced / Acc@τ / τ sweep / macro-F1 / ECE / Brier；Auto 弱验证；通道消融；runs 落盘
 - `classifier.train(..., split=)` — T 只在 val 拟合；test 标签不可见
 - 双模式：selective（阈值弃权）vs forced top-1
 - Phase 2：`duration_ms` 时序特征；`train/eval --channels/--ablate`；`blindtest ablate`；`blindtest eval-auto`
@@ -109,9 +109,9 @@ verkeep-verify blindtest eval --split default --tau 0.7 --sweep
 
 Runs（仅本机，不入 git）：
 
-- TrainReport：`~/.verkeep/verify/blindtest/runs/20260713-192614/`
-- EvalReport forced：`~/.verkeep/verify/blindtest/runs/20260713-192621/`
-- EvalReport selective+sweep：`~/.verkeep/verify/blindtest/runs/20260713-192621-1/`
+- TrainReport：`~/.verkee/verify/blindtest/runs/20260713-192614/`
+- EvalReport forced：`~/.verkee/verify/blindtest/runs/20260713-192621/`
+- EvalReport selective+sweep：`~/.verkee/verify/blindtest/runs/20260713-192621-1/`
 
 结论：管道已通；数字不可外推——test n=3、单会话、闭集缺一类。扩量（批量手选模型会话）优先于换模型。
 
@@ -127,7 +127,7 @@ Runs（仅本机，不入 git）：
 | **Acc@τ=0.7** | | **90.0%**（coverage 62.5%） |
 | τ@0.8 | Acc / cov | 100% / 50% |
 
-Runs：`~/.verkeep/verify/blindtest/runs/20260713-201802/`（train）、`…-1`（forced）、`…-2`（selective）。
+Runs：`~/.verkee/verify/blindtest/runs/20260713-201802/`（train）、`…-1`（forced）、`…-2`（selective）。
 
 说明：早先误跑了一批 fable Task（额度已花）；后续 GT 以 composer / gpt / grok 为主。
 
@@ -157,13 +157,13 @@ Runs：`~/.verkeep/verify/blindtest/runs/20260713-201802/`（train）、`…-1`�
 
 混淆（forced）：composer 2/2、terra 2/2；grok 6/7（1→fable）；sol 1/2（1→terra）；fable 0/1（→composer）。
 
-Runs（复测）：`~/.verkeep/verify/blindtest/runs/20260713-203239/`（train）、`…/20260713-203240/`（forced）、`…/20260713-203240-1/`（selective+sweep）。
+Runs（复测）：`~/.verkee/verify/blindtest/runs/20260713-203239/`（train）、`…/20260713-203240/`（forced）、`…/20260713-203240-1/`（selective+sweep）。
 
 **勿与 LOCO-CV 91.7% 或旧 Acc@forced 66.7%（default split n=3）混报。**
 
 ### Cheap GT v3 长会话扩量（2026-07-15，split=`cheap-gt-v3` seed=42）
 
-采集：固定模型 Task 子代理（非 Auto）× 三便宜类 × 五场景（解释/编辑草稿/重构提案/Plan/工具密集），每会话 resume 至 **5 turns**。并行同 prompt 曾导致 `hook_task` 指纹碰撞、全部误标为 terra；已用 `~/.verkeep/verify/blindtest/conversation_model_overrides.json`（`launch_override`）按启动模型纠偏，并让冲突指纹不再静默覆盖。
+采集：固定模型 Task 子代理（非 Auto）× 三便宜类 × 五场景（解释/编辑草稿/重构提案/Plan/工具密集），每会话 resume 至 **5 turns**。并行同 prompt 曾导致 `hook_task` 指纹碰撞、全部误标为 terra；已用 `~/.verkee/verify/blindtest/conversation_model_overrides.json`（`launch_override`）按启动模型纠偏，并让冲突指纹不再静默覆盖。
 
 | 模型 | 会话 | 长会话(≥5) | 样本 | test 会话 / 样本 |
 |------|-----:|----------:|-----:|-----------------:|
@@ -184,7 +184,7 @@ Runs（复测）：`~/.verkeep/verify/blindtest/runs/20260713-203239/`（train�
 
 混淆（forced）：grok 11/14；composer 3/11（多→sol）；sol/terra 近亲仍混；fable 0/1。读法：扩量后 forced 从 v2 的 78.6%（n=14）降到 53.1%（n=32）——长会话 + 近亲类更难，属预期平台期，优先 B3 近亲混淆而非宣称涨点。
 
-Runs：`~/.verkeep/verify/blindtest/runs/20260715-113407/`（train）、`…-1`（forced）、`…-2`（selective）。
+Runs：`~/.verkee/verify/blindtest/runs/20260715-113407/`（train）、`…-1`（forced）、`…-2`（selective）。
 
 ### B3 近亲门控 MVP（2026-07-15，split=`cheap-gt-v3`）
 
@@ -253,7 +253,7 @@ venv/bin/python -m pytest -q tests -k "not ml_optional"
 | 刷新 | ready/Refresh 静默 `cursor import --since 1d`；失败仅 notice，仍展示缓存 |
 | doctor | green / green·warnings / needs fix；CLI not found → Open Settings → `verai.aiVerifyPath` |
 | 打包 | `cd extensions/verai-cursor && npm run package` → `verai-cursor-0.1.0.vsix` |
-| 对账 | `npm run accept`：bridge `task` ≡ `verkeep-verify cursor task <id> --json`（coverage / factual_* / inferred_*；<10s） |
+| 对账 | `npm run accept`：bridge `task` ≡ `verkee-verify cursor task <id> --json`（coverage / factual_* / inferred_*；<10s） |
 | 分轨 | 推断不写 `resolved_model`；面板不展示 prompt/response 正文 |
 
 分支：`a3-sidebar-dogfood`。装 VSIX 后 Activity Bar → VerAI 即可 dogfood。
@@ -300,7 +300,7 @@ B 轨（GT）已到 B3 MVP；B4 / Phase 3 / duration / 探针仅用户点名再�
 - Cursor 第一方云请求通常不走本地代理；proxy 仅是 BYOK / 兼容 API 场景的补充证据。
 - Cursor 数据处理应只保留任务标识、模型、计数、状态等元数据；不要把 prompt 或 response 正文写入项目数据库或测试夹具。
 - 不要提交 `venv/`、真实日志、数据库、Token、API key 或 Cursor 用户数据。
-- 盲测 sealed labels / corpus / runs 仅存 `~/.verkeep/verify/blindtest/`，不入 git。
+- 盲测 sealed labels / corpus / runs 仅存 `~/.verkee/verify/blindtest/`，不入 git。
 
 ## 下一会话开场提示
 

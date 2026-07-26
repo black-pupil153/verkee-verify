@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "verkeep-verify"
+name = "verkee-verify"
 version = "0.1.0"
 description = "AI API Real-time Monitor - 给你的 AI API 装监控摄像头"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    { name = "Verkeep Verify Team" }
+    { name = "Verkee Verify Team" }
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -49,7 +49,7 @@ dev = [
 ]
 
 [project.scripts]
-verkeep-verify = "verkeep_verify.cli:main"
+verkee-verify = "verkee_verify.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ai-verify-cli/ai-verify"
@@ -58,7 +58,7 @@ Repository = "https://github.com/ai-verify-cli/ai-verify"
 Issues = "https://github.com/ai-verify-cli/ai-verify/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["verkeep_verify"]
+packages = ["verkee_verify"]
 
 [tool.black]
 line-length = 88

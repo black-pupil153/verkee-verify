@@ -115,7 +115,7 @@
 | LPcodedec | C | https://github.com/Shinwoo-Park/detecting_llm_paraphrased_code_via_coding_style_features | 风格特征轻量 |
 | LLMmap code | D | 论文配套（USENIX 25） | 主动探针查询集 |
 | Multilingual-MGT-AA | B | https://github.com/MLNTeam-Unical/Multilingual-MGT-AA | 多语归因基线 |
-| VerAI blindtest | B/E | `verkeep_verify/blindtest/` | 本地可扩展底座 |
+| VerAI blindtest | B/E | `verkee_verify/blindtest/` | 本地可扩展底座 |
 
 ---
 

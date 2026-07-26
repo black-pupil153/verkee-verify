@@ -7,12 +7,12 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from verkeep_verify.blindtest.classifier import BlindModelClassifier
-from verkeep_verify.blindtest.corpus import Corpus, CorpusSample
-from verkeep_verify.monitor.blindtest_infer import ensure_task_inferences
-from verkeep_verify.monitor.cursor_usage import CursorUsageImporter, aggregate_task
-from verkeep_verify.providers.cursor import CursorPaths, read_conversation_summaries
-from verkeep_verify.storage.database import Database
+from verkee_verify.blindtest.classifier import BlindModelClassifier
+from verkee_verify.blindtest.corpus import Corpus, CorpusSample
+from verkee_verify.monitor.blindtest_infer import ensure_task_inferences
+from verkee_verify.monitor.cursor_usage import CursorUsageImporter, aggregate_task
+from verkee_verify.providers.cursor import CursorPaths, read_conversation_summaries
+from verkee_verify.storage.database import Database
 
 
 def _train_tiny_model(path: Path) -> None:
@@ -78,7 +78,7 @@ def test_ensure_task_inferences_writes_without_touching_resolved(tmp_path, monke
     conv = "task-ensure-001"
     _write_transcript(projects, conv, ["q1", "q2"])
     monkeypatch.setattr(
-        "verkeep_verify.blindtest.corpus.discover_transcript_files",
+        "verkee_verify.blindtest.corpus.discover_transcript_files",
         lambda projects_dir=None: [
             (conv, projects / "proj" / "agent-transcripts" / conv / f"{conv}.jsonl")
         ],
@@ -140,7 +140,7 @@ def test_aggregate_task_auto_infer_hook(tmp_path, monkeypatch):
     conv = "task-auto-hook-002"
     _write_transcript(projects, conv, ["hello"])
     monkeypatch.setattr(
-        "verkeep_verify.blindtest.corpus.discover_transcript_files",
+        "verkee_verify.blindtest.corpus.discover_transcript_files",
         lambda projects_dir=None: [
             (conv, projects / "proj" / "agent-transcripts" / conv / f"{conv}.jsonl")
         ],
@@ -148,7 +148,7 @@ def test_aggregate_task_auto_infer_hook(tmp_path, monkeypatch):
     model_path = tmp_path / "model.json"
     _train_tiny_model(model_path)
     monkeypatch.setattr(
-        "verkeep_verify.monitor.blindtest_infer.DEFAULT_MODEL_PATH", model_path
+        "verkee_verify.monitor.blindtest_infer.DEFAULT_MODEL_PATH", model_path
     )
 
     db = Database(db_path=tmp_path / "ai_verify.db")

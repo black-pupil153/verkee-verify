@@ -1,6 +1,6 @@
 """CC Switch 配置读取测试"""
 
-from verkeep_verify.providers.cc_switch import (
+from verkee_verify.providers.cc_switch import (
     ProviderConfig,
     _extract_from_env,
     resolve_provider,

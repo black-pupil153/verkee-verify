@@ -135,7 +135,7 @@ export class AiVerifyBridge {
     } catch {
       throw new AiVerifyBridgeError(
         "invalid-json",
-        `verkeep-verify ${args.join(" ")} returned invalid JSON`
+        `verkee-verify ${args.join(" ")} returned invalid JSON`
       );
     }
   }
@@ -157,19 +157,19 @@ export class AiVerifyBridge {
       if (e.code === "ENOENT") {
         throw new AiVerifyBridgeError(
           "not-found",
-          `verkeep-verify CLI not found at "${cli}". Set setting verai.aiVerifyPath or install with pip install -e .`
+          `verkee-verify CLI not found at "${cli}". Set setting verai.aiVerifyPath or install with pip install -e .`
         );
       }
       if (e.killed || e.signal === "SIGTERM" || e.code === "ETIMEDOUT") {
         throw new AiVerifyBridgeError(
           "timeout",
-          `verkeep-verify ${args.join(" ")} timed out after 60 seconds`
+          `verkee-verify ${args.join(" ")} timed out after 60 seconds`
         );
       }
       const exitCode = typeof e.code === "number" ? ` (exit ${e.code})` : "";
       throw new AiVerifyBridgeError(
         "command-failed",
-        `verkeep-verify ${args.join(" ")} failed${exitCode}`
+        `verkee-verify ${args.join(" ")} failed${exitCode}`
       );
     }
   }

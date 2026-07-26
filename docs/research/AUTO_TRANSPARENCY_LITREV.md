@@ -81,7 +81,7 @@ Cursor Auto **故意不暴露**逐步底层模型；本机 `ai_code_hashes.model
 
 ### 2.3 与 blindtest 差距
 
-现有 [`features.py`](../../verkeep_verify/blindtest/features.py)：char n-gram 哈希桶、列表/标题/代码围栏、tool 名哈希、TTFT。  
+现有 [`features.py`](../../verkee_verify/blindtest/features.py)：char n-gram 哈希桶、列表/标题/代码围栏、tool 名哈希、TTFT。  
 **缺失（论文级）**：显式 POS/依存统计、句子长度分布高阶矩、开场套话类型学、语义编码器嵌入（SSLA 双路）。  
 **已有优势**：隐私友好（不落原文）、温度校准、阈值弃权（H6）。
 
@@ -124,7 +124,7 @@ Agent 产出以**代码编辑**为主；文本 AA 不足时，代码轨是提高
 
 - **禁止**把探针结果直接当作「下一个用户 turn 的模型」
 - **允许**用途：(1) 手选模型下建指纹库；(2) 周期性估计 Auto **池分布先验**；(3) 与 Invisible Traces 的 static 支路对齐
-- VerAI 现有 [`fingerprint.py`](../../verkeep_verify/monitor/fingerprint.py) 面向**渠道 API**，不是 Cursor 内 Auto；复用题库思想，但会话上下文不同
+- VerAI 现有 [`fingerprint.py`](../../verkee_verify/monitor/fingerprint.py) 面向**渠道 API**，不是 Cursor 内 Auto；复用题库思想，但会话上下文不同
 
 ### 4.3 结论
 

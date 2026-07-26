@@ -1,6 +1,6 @@
 """质量评估模块测试"""
 
-from verkeep_verify.monitor.quality import QualityTester
+from verkee_verify.monitor.quality import QualityTester
 
 
 def test_number_check_extracts_value():

@@ -5,7 +5,7 @@ Usage (from repo root, venv active):
   python tools/dogfood_app16.py
   python tools/dogfood_app16.py --json
 
-Does not invent Auto GT. Uses real ~/.verkeep/verify DB + CLI contracts.
+Does not invent Auto GT. Uses real ~/.verkee/verify DB + CLI contracts.
 """
 
 from __future__ import annotations
@@ -51,14 +51,14 @@ def _run(args: List[str], *, timeout: float = 30.0) -> subprocess.CompletedProce
     )
 
 
-def _verkeep_verify(*args: str, timeout: float = 30.0) -> subprocess.CompletedProcess:
-    exe = REPO / "venv" / "bin" / "verkeep-verify"
-    cmd = [str(exe) if exe.is_file() else "verkeep-verify", *args]
+def _verkee_verify(*args: str, timeout: float = 30.0) -> subprocess.CompletedProcess:
+    exe = REPO / "venv" / "bin" / "verkee-verify"
+    cmd = [str(exe) if exe.is_file() else "verkee-verify", *args]
     return _run(cmd, timeout=timeout)
 
 
 def check_doctor() -> Check:
-    r = _verkeep_verify("cursor", "doctor", "--json")
+    r = _verkee_verify("cursor", "doctor", "--json")
     if r.returncode != 0:
         return Check("doctor", False, f"exit {r.returncode}: {r.stderr[:200]}")
     try:
@@ -75,7 +75,7 @@ def check_doctor() -> Check:
 
 def check_latest_mix() -> Check:
     t0 = time.perf_counter()
-    r = _verkeep_verify("cursor", "task", "--latest", "--json")
+    r = _verkee_verify("cursor", "task", "--latest", "--json")
     elapsed = time.perf_counter() - t0
     if r.returncode != 0:
         return Check("latest_json", False, f"exit {r.returncode}: {r.stderr[:200]}")
@@ -104,7 +104,7 @@ def check_latest_mix() -> Check:
 
 
 def check_human_default() -> Check:
-    r = _verkeep_verify("cursor", "task", "--latest")
+    r = _verkee_verify("cursor", "task", "--latest")
     if r.returncode != 0:
         return Check("human_default", False, f"exit {r.returncode}")
     out = r.stdout
@@ -117,7 +117,7 @@ def check_human_default() -> Check:
 
 
 def check_list_detail_parity() -> Check:
-    r = _verkeep_verify("cursor", "tasks", "--json")
+    r = _verkee_verify("cursor", "tasks", "--json")
     if r.returncode != 0:
         return Check("list_detail", False, f"tasks exit {r.returncode}")
     try:
@@ -133,7 +133,7 @@ def check_list_detail_parity() -> Check:
     ordered = sorted(tasks, key=lambda t: -(t.get("subagent_count") or 0))
     for t in ordered[:5]:
         tid = t["task_id"]
-        dr = _verkeep_verify("cursor", "task", tid, "--json")
+        dr = _verkee_verify("cursor", "task", tid, "--json")
         if dr.returncode != 0:
             mismatches.append(f"{tid[:8]}: detail exit {dr.returncode}")
             continue
@@ -156,7 +156,7 @@ def check_npm_accept() -> Check:
     import os
 
     ext = REPO / "extensions" / "verai-cursor"
-    ai = REPO / "venv" / "bin" / "verkeep-verify"
+    ai = REPO / "venv" / "bin" / "verkee-verify"
     env = os.environ.copy()
     env["VERAI_AI_VERIFY_PATH"] = str(ai)
     r = subprocess.run(

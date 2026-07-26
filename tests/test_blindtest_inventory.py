@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from verkeep_verify.blindtest.corpus import Corpus, CorpusSample
-from verkeep_verify.blindtest.inventory import DEFAULT_EXPAND_TARGETS, build_inventory
-from verkeep_verify.blindtest.splits import SplitRegistry, create_split
+from verkee_verify.blindtest.corpus import Corpus, CorpusSample
+from verkee_verify.blindtest.inventory import DEFAULT_EXPAND_TARGETS, build_inventory
+from verkee_verify.blindtest.splits import SplitRegistry, create_split
 
 
 def _sample(cid: str, label: str, turn: int = 0) -> CorpusSample:

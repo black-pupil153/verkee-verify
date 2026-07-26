@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from verkeep_verify.cursor_hooks import (
+from verkee_verify.cursor_hooks import (
     analyze_probe_ndjson,
     hook_script_path,
     merge_hooks,
@@ -31,7 +31,7 @@ def test_merge_hooks_preserves_existing(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(
-        "verkeep_verify.cursor_hooks.hook_script_path",
+        "verkee_verify.cursor_hooks.hook_script_path",
         lambda: tmp_path / "hooks" / "cursor-track.sh",
     )
 
@@ -59,15 +59,15 @@ def test_install_and_uninstall_hooks(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
-    script_dir = tmp_path / "verkeep-verify" / "hooks"
-    monkeypatch.setattr("verkeep_verify.cursor_hooks.cursor_hooks_json_path", lambda: hooks_json)
+    script_dir = tmp_path / "verkee-verify" / "hooks"
+    monkeypatch.setattr("verkee_verify.cursor_hooks.cursor_hooks_json_path", lambda: hooks_json)
     monkeypatch.setattr(
-        "verkeep_verify.cursor_hooks.hook_script_path",
+        "verkee_verify.cursor_hooks.hook_script_path",
         lambda: script_dir / "cursor-track.sh",
     )
     monkeypatch.setattr(
-        "verkeep_verify.cursor_hooks.verify_home",
-        lambda: tmp_path / "verkeep-verify",
+        "verkee_verify.cursor_hooks.verify_home",
+        lambda: tmp_path / "verkee-verify",
     )
 
     result = install_hooks(hooks_json=hooks_json, script_out=script_dir / "cursor-track.sh")
@@ -135,7 +135,7 @@ def test_analyze_all_default(tmp_path):
 
 
 def test_normalize_cursor_id_strips_quotes_and_newline():
-    from verkeep_verify.cursor_hook_events import normalize_cursor_id
+    from verkee_verify.cursor_hook_events import normalize_cursor_id
 
     raw = "'call_SNFbIpOhES8G3CWx9LnrzQg7\nfc_014b39426f78f4ba016a505a00d948819fb65f20c819420394'"
     assert normalize_cursor_id(raw) == "call_SNFbIpOhES8G3CWx9LnrzQg7"

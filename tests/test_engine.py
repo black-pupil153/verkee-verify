@@ -1,6 +1,6 @@
 """验证引擎测试"""
 
-from verkeep_verify.monitor.engine import VerifyEngine
+from verkee_verify.monitor.engine import VerifyEngine
 
 
 def _engine(base_url="https://api.example.com/v1", model="gpt-4"):

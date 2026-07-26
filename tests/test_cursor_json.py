@@ -6,15 +6,15 @@ import json
 
 from click.testing import CliRunner
 
-from verkeep_verify.cli import cursor_doctor, cursor_task, cursor_tasks
-from verkeep_verify.monitor.cursor_usage import (
+from verkee_verify.cli import cursor_doctor, cursor_task, cursor_tasks
+from verkee_verify.monitor.cursor_usage import (
     TaskSummary,
     TaskUsageReport,
     task_report_to_dict,
     task_summary_to_dict,
 )
-from verkeep_verify.providers.cursor import DoctorCheck, DoctorReport
-from verkeep_verify.storage.database import Database
+from verkee_verify.providers.cursor import DoctorCheck, DoctorReport
+from verkee_verify.storage.database import Database
 
 
 def test_doctor_report_to_dict_lean():
@@ -111,7 +111,7 @@ def test_task_summary_to_dict():
 def test_cursor_tasks_and_task_json(tmp_path, monkeypatch):
     db_path = tmp_path / "ai_verify.db"
     monkeypatch.setattr(
-        "verkeep_verify.storage.database.Database",
+        "verkee_verify.storage.database.Database",
         lambda *a, **k: Database(db_path=db_path),
     )
 
@@ -177,7 +177,7 @@ def test_cursor_doctor_json(monkeypatch):
         checks=[DoctorCheck(name="probe", ok=True, detail="ok")],
         suggestion="",
     )
-    import verkeep_verify.providers.cursor as cursor_mod
+    import verkee_verify.providers.cursor as cursor_mod
 
     monkeypatch.setattr(cursor_mod, "run_doctor", lambda *a, **k: fake)
 

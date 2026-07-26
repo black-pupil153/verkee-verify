@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from verkeep_verify.dashboard_cursor import build_view
-from verkeep_verify.monitor.cursor_usage import (
+from verkee_verify.dashboard_cursor import build_view
+from verkee_verify.monitor.cursor_usage import (
     CursorUsageImporter,
     aggregate_period,
 )
-from verkeep_verify.providers.cursor import CursorPaths
-from verkeep_verify.storage.database import Database
+from verkee_verify.providers.cursor import CursorPaths
+from verkee_verify.storage.database import Database
 
 FIXTURE_LOG = Path(__file__).parent / "fixtures" / "cursor" / "structured_log_sample.log"
 

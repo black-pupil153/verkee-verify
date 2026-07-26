@@ -66,7 +66,7 @@ flowchart TB
 [`extensions/verai-cursor/`](../extensions/verai-cursor/)（VS Code extension，兼容 Cursor）：
 
 - Activity Bar + `verai.sessionView` WebviewViewProvider
-- `bridge` 调本机 `verkeep-verify … --json`
+- `bridge` 调本机 `verkee-verify … --json`
 - 面板：会话选择器 + **统一模型构成** + 折叠来源细则
 
 首版 **100% 本地**，无云端账号。
@@ -75,9 +75,9 @@ flowchart TB
 
 | 命令 | 用途 | 状态 |
 |------|------|------|
-| `verkeep-verify cursor doctor --json` | 插件首屏健康检查 | ✅ |
-| `verkeep-verify cursor tasks --json --limit N` | 最近会话列表 | ✅ |
-| `verkeep-verify cursor task [--latest\|id] --json` | 单会话报告（含 `model_mix_v2`） | ✅ |
+| `verkee-verify cursor doctor --json` | 插件首屏健康检查 | ✅ |
+| `verkee-verify cursor tasks --json --limit N` | 最近会话列表 | ✅ |
+| `verkee-verify cursor task [--latest\|id] --json` | 单会话报告（含 `model_mix_v2`） | ✅ |
 | 插件内静默 `cursor import --since 1d` | 刷新数据 | ✅（扩展 refresh / ready） |
 
 ### A3. 面板 UX ✅（dogfood，分轨版）
@@ -96,14 +96,14 @@ flowchart TB
 ### A4. 安装路径（软发布 · 当前主线）
 
 1. `vsce package` → `.vsix`，文档写 Install from VSIX ✅（`npm run package`）
-2. 依赖本机 `verkeep-verify` 在 PATH；doctor 失败给修复步骤 ✅（含 Open Settings）
+2. 依赖本机 `verkee-verify` 在 PATH；doctor 失败给修复步骤 ✅（含 Open Settings）
 3. 可选提示 `cursor hooks install` ✅（根 README + 扩展 README）
 4. 根 README「Cursor 侧边栏（软发布）」一页安装路径 ✅
 5. Alpha 清单 [`docs/ALPHA_CHECKLIST.md`](ALPHA_CHECKLIST.md) ✅
 6. GitHub Release 挂 VSIX ✅ [v0.1.0-sidebar](https://github.com/black-pupil153/VerAI/releases/tag/v0.1.0-sidebar)
 
 **验收**：侧边栏打开 → 选最近会话 → **5 秒内**看懂谁用得最多；与 CLI `model_mix_v2` 数字一致。  
-本机：`VERAI_AI_VERIFY_PATH=../../venv/bin/verkeep-verify npm run accept`（bridge ≡ `cursor task --json`，含 `model_mix_v2`）。
+本机：`VERAI_AI_VERIFY_PATH=../../venv/bin/verkee-verify npm run accept`（bridge ≡ `cursor task --json`，含 `model_mix_v2`）。
 
 **节奏**：A3.1/A3.2 ✅ → A4 软发布 ✅ → **closed alpha（约 5 人）**。
 
@@ -155,7 +155,7 @@ Repo 星标 → VSIX 软发布 → 活跃侧边栏用户 → 反馈议题 → �
 3. **Public soft launch**：GitHub Release + VSIX + 一页 README
 4. **Growth**：Cursor Forum → X → Reddit r/cursor → 即刻/V2EX → Product Hunt（稳定后再上）
 
-反馈：面板底部极轻本地 `~/.verkeep/verify/feedback.jsonl`（默认不上报）；每周选 1–2 项进下一版。
+反馈：面板底部极轻本地 `~/.verkee/verify/feedback.jsonl`（默认不上报）；每周选 1–2 项进下一版。
 
 增长指标：doctor 绿、侧边栏周活、coverage 分布、「不准」反馈占比、GitHub 星标。  
 暂缓：付费、SaaS、团队云看板。

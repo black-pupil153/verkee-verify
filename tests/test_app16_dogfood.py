@@ -10,13 +10,13 @@ import json
 
 from click.testing import CliRunner
 
-from verkeep_verify.cli import cursor_task, cursor_tasks
-from verkeep_verify.monitor.cursor_usage import (
+from verkee_verify.cli import cursor_task, cursor_tasks
+from verkee_verify.monitor.cursor_usage import (
     UNKNOWN_MIX_LABEL,
     aggregate_task,
     list_tasks,
 )
-from verkeep_verify.storage.database import Database
+from verkee_verify.storage.database import Database
 
 
 def _seed_auto_session_with_subagent(db: Database) -> str:
@@ -149,7 +149,7 @@ def test_app16_auto_fixture_mix_and_list_parity(tmp_path, monkeypatch):
     summary = next(s for s in summaries if s.task_id == root)
     assert summary.request_count == report.request_count == mix["total_calls"]
 
-    import verkeep_verify.storage.database as db_mod
+    import verkee_verify.storage.database as db_mod
 
     monkeypatch.setattr(
         db_mod, "Database", lambda *a, **k: Database(db_path=db_path)

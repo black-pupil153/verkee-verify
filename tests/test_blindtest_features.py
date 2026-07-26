@@ -2,7 +2,7 @@
 
 import json
 
-from verkeep_verify.blindtest.features import TurnRecord, extract_features
+from verkee_verify.blindtest.features import TurnRecord, extract_features
 
 
 def _make_turn(**kwargs) -> TurnRecord:
@@ -86,7 +86,7 @@ def test_duration_and_out_chars_latency():
 
 
 def test_feature_channel_filter():
-    from verkeep_verify.blindtest.features import (
+    from verkee_verify.blindtest.features import (
         filter_features_by_channels,
         parse_channels,
     )

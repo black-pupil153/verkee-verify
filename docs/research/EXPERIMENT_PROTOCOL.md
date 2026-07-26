@@ -2,7 +2,7 @@
 
 > 2026-07-11  
 > 目的：用手选模型会话构造 **ground truth**，训练/评估推断器；**禁止**用 Auto 会话自标当 GT  
-> 隐私：特征与标签可存 `~/.verkeep/verify/blindtest/`；**不提交**真实正文到 git
+> 隐私：特征与标签可存 `~/.verkee/verify/blindtest/`；**不提交**真实正文到 git
 
 ---
 
@@ -67,21 +67,21 @@ claude-fable-5 | grok-4.5 | gpt-5.5 | composer-2.5-fast | …
 **批量流水线（会话跑完后一条龙）：**
 
 ```bash
-verkeep-verify cursor import --since 30d --full
-verkeep-verify blindtest build-corpus --since 30d   # 自动从 hook/log 对齐标签
-verkeep-verify blindtest split --name default --seed 42
-verkeep-verify blindtest train --split default
-verkeep-verify blindtest eval --split default --forced
-verkeep-verify blindtest eval --split default --tau 0.7 --sweep
-verkeep-verify blindtest ablate --split default      # 通道消融
-verkeep-verify blindtest eval-auto --limit 30        # Auto 弱验证
+verkee-verify cursor import --since 30d --full
+verkee-verify blindtest build-corpus --since 30d   # 自动从 hook/log 对齐标签
+verkee-verify blindtest split --name default --seed 42
+verkee-verify blindtest train --split default
+verkee-verify blindtest eval --split default --forced
+verkee-verify blindtest eval --split default --tau 0.7 --sweep
+verkee-verify blindtest ablate --split default      # 通道消融
+verkee-verify blindtest eval-auto --limit 30        # Auto 弱验证
 ```
 
 目标：每类至少 **2+ 会话** 进 split，使 test 能见到各类（当前瓶颈是 `claude-fable-5` 仅 1 会话）。
 
 ### 3.3 标签对齐（已有 corpus 逻辑）
 
-沿用 [`blindtest/corpus.py`](../../verkeep_verify/blindtest/corpus.py) 优先级：
+沿用 [`blindtest/corpus.py`](../../verkee_verify/blindtest/corpus.py) 优先级：
 
 1. hook `model_id` 按 `generation_id` join（最高优先）
 2. structured log `modelName != default` 按时间对齐
@@ -94,24 +94,24 @@ verkeep-verify blindtest eval-auto --limit 30        # Auto 弱验证
 
 - 按 **conversation_id** 划分 train/val/test（防 turn 泄漏）
 - 建议 60/20/20；leave-one-conversation-out 仅作无 split 时的诊断（**不是**隐藏 test 盲评）
-- **密封标签**：`verkeep-verify blindtest split` 写入
-  - `~/.verkeep/verify/blindtest/splits/<name>.json`（registry：会话 ID 列表）
-  - `~/.verkeep/verify/blindtest/splits/<name>.sealed.json`（仅 test 标签）
+- **密封标签**：`verkee-verify blindtest split` 写入
+  - `~/.verkee/verify/blindtest/splits/<name>.json`（registry：会话 ID 列表）
+  - `~/.verkee/verify/blindtest/splits/<name>.sealed.json`（仅 test 标签）
 - 训练进程（`train --split`）只读 registry，**不得**读取 sealed；test 会话永不进 train
 - 评估（`blindtest eval`）再加载 sealed 与预测比对
 
 ```bash
-verkeep-verify blindtest build-corpus --since 30d
-verkeep-verify blindtest split --name default --seed 42 --ratios 0.6,0.2,0.2
-verkeep-verify blindtest train --split default
-verkeep-verify blindtest train --split default --ablate latency   # 消融示例
-verkeep-verify blindtest eval --split default --forced          # Acc@forced（100% coverage）
-verkeep-verify blindtest eval --split default --tau 0.7 --sweep # Acc@τ + τ sweep
-verkeep-verify blindtest ablate --split default
-verkeep-verify blindtest eval-auto --limit 30
+verkee-verify blindtest build-corpus --since 30d
+verkee-verify blindtest split --name default --seed 42 --ratios 0.6,0.2,0.2
+verkee-verify blindtest train --split default
+verkee-verify blindtest train --split default --ablate latency   # 消融示例
+verkee-verify blindtest eval --split default --forced          # Acc@forced（100% coverage）
+verkee-verify blindtest eval --split default --tau 0.7 --sweep # Acc@τ + τ sweep
+verkee-verify blindtest ablate --split default
+verkee-verify blindtest eval-auto --limit 30
 ```
 
-TrainReport / EvalReport / AutoEvalReport 落盘：`~/.verkeep/verify/blindtest/runs/<ts>/`
+TrainReport / EvalReport / AutoEvalReport 落盘：`~/.verkee/verify/blindtest/runs/<ts>/`
 （含 Acc@forced、Acc@τ、macro-F1、混淆矩阵、ECE、Brier、agree_with_fact、opaque_residual；不落 prompt/response 正文）。
 
 双模式：
@@ -191,16 +191,16 @@ opaque_residual = (# turns still shown as auto-opaque) / total  → 目标 0
 
 ```text
 [ ] 每模型批量开手选会话（picker=M，关 Auto；类型见表）
-[ ] verkeep-verify cursor import --since …
-[ ] verkeep-verify blindtest build-corpus（或等价）
+[ ] verkee-verify cursor import --since …
+[ ] verkee-verify blindtest build-corpus（或等价）
 [ ] 确认标签来源统计：hook / tracking / log 占比；每类 ≥2 会话
-[ ] verkeep-verify blindtest split --seed …（确认 test 会话数 > 0 且尽量覆盖各类）
-[ ] verkeep-verify blindtest train --split … → 记录 TrainReport（runs/<ts>/）
+[ ] verkee-verify blindtest split --seed …（确认 test 会话数 > 0 且尽量覆盖各类）
+[ ] verkee-verify blindtest train --split … → 记录 TrainReport（runs/<ts>/）
 [ ] 确认训练未加载 *.sealed.json；T 仅在 val 拟合
-[ ] verkeep-verify blindtest eval --forced / --tau / --sweep
+[ ] verkee-verify blindtest eval --forced / --tau / --sweep
 [ ] test 表：Acc@forced / Acc@τ / F1 / ECE / Brier / 混淆矩阵
-[ ] verkeep-verify blindtest ablate --split …（通道消融）
-[ ] verkeep-verify blindtest eval-auto（coverage / opaque_residual / agree_with_fact）
+[ ] verkee-verify blindtest ablate --split …（通道消融）
+[ ] verkee-verify blindtest eval-auto（coverage / opaque_residual / agree_with_fact）
 [ ] 更新 FEASIBILITY 中的「实测」列（实现阶段）
 ```
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from verkeep_verify.monitor.cursor_usage import (
+from verkee_verify.monitor.cursor_usage import (
     UNKNOWN_MIX_LABEL,
     CursorUsageImporter,
     aggregate_task,
@@ -15,8 +15,8 @@ from verkeep_verify.monitor.cursor_usage import (
     parse_since,
     task_report_to_dict,
 )
-from verkeep_verify.providers.cursor import CursorPaths
-from verkeep_verify.storage.database import Database
+from verkee_verify.providers.cursor import CursorPaths
+from verkee_verify.storage.database import Database
 
 FIXTURE_LOG = (
     Path(__file__).parent / "fixtures" / "cursor" / "structured_log_sample.log"
@@ -57,7 +57,7 @@ def tracking_db(tmp_path):
 @pytest.fixture
 def cursor_env(tmp_path, tracking_db, monkeypatch):
     monkeypatch.setattr(
-        "verkeep_verify.monitor.cursor_usage.default_hook_event_paths",
+        "verkee_verify.monitor.cursor_usage.default_hook_event_paths",
         lambda: [],
     )
 
@@ -681,7 +681,7 @@ def test_aggregate_includes_one_level_subagents(tmp_path):
         "grok-4.5",
     }
 
-    from verkeep_verify.monitor.cursor_usage import list_tasks
+    from verkee_verify.monitor.cursor_usage import list_tasks
 
     summaries = list_tasks(db, limit=5)
     root = next(s for s in summaries if s.task_id == "task-root-mix")

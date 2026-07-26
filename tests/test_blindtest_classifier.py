@@ -4,13 +4,13 @@ import random
 
 import pytest
 
-from ai_verify.blindtest.classifier import (
+from verkeep_verify.blindtest.classifier import (
     BlindModelClassifier,
     InferenceResult,
     TrainReport,
 )
-from ai_verify.blindtest.corpus import CorpusSample
-from ai_verify.blindtest.features import TurnRecord, extract_features
+from verkeep_verify.blindtest.corpus import CorpusSample
+from verkeep_verify.blindtest.features import TurnRecord, extract_features
 
 CN_WORDS = ["首先", "然后", "读取文件", "修改代码", "运行测试", "检查结果", "这个函数", "需要注意"]
 EN_WORDS = ["first", "let's", "read the file", "update code", "run tests", "check output", "this function"]
@@ -163,7 +163,7 @@ def test_train_rejects_tiny_corpus():
 
 def test_pure_python_nb_fallback(monkeypatch):
     """强制 sklearn 不可用，验证纯 Python NB 后备可用。"""
-    import ai_verify.blindtest.classifier as mod
+    import verkeep_verify.blindtest.classifier as mod
 
     monkeypatch.setattr(mod, "_sklearn_available", lambda: False)
     samples = _build_synthetic_corpus()
@@ -192,7 +192,7 @@ def test_calibration_probability_range():
 
 
 def test_near_pair_gate_abstains_on_small_margin():
-    from ai_verify.blindtest.classifier import (
+    from verkeep_verify.blindtest.classifier import (
         ABSTAIN_NEAR_MARGIN,
         ABSTAIN_THRESHOLD,
         near_pair_margin_too_small,
@@ -249,7 +249,7 @@ def test_near_pair_gate_abstains_on_small_margin():
 
 
 def test_predict_turn_near_gate_and_persist(tmp_path):
-    from ai_verify.blindtest.classifier import ABSTAIN_NEAR_MARGIN
+    from verkeep_verify.blindtest.classifier import ABSTAIN_NEAR_MARGIN
 
     samples = _build_synthetic_corpus()
     # 把合成类名映射成近亲对，便于门控命中

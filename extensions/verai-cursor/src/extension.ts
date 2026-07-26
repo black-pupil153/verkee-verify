@@ -9,7 +9,7 @@ import {
 
 export function activate(context: vscode.ExtensionContext): void {
   const bridge = new AiVerifyBridge(() =>
-    vscode.workspace.getConfiguration("verai").get<string>("aiVerifyPath", "ai-verify")
+    vscode.workspace.getConfiguration("verai").get<string>("aiVerifyPath", "verkeep-verify")
   );
 
   const provider = new SessionUsageViewProvider(context.extensionUri, bridge);
@@ -74,7 +74,7 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
       this._post({
         type: "notice",
         message:
-          "Could not import recent Cursor data. Showing cached data; run `ai-verify cursor import --since 1d` in a terminal for details.",
+          "Could not import recent Cursor data. Showing cached data; run `verkeep-verify cursor import --since 1d` in a terminal for details.",
       });
     }
 
@@ -115,13 +115,13 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
     if (err instanceof AiVerifyBridgeError) {
       const fixes: Record<AiVerifyBridgeError["kind"], string> = {
         "not-found":
-          "Install the CLI, ensure `ai-verify` is on PATH, or set `verai.aiVerifyPath` to its absolute path.",
+          "Install the CLI, ensure `verkeep-verify` is on PATH, or set `verai.aiVerifyPath` to its absolute path.",
         timeout:
-          "Try Refresh again. If it still times out, run `ai-verify cursor doctor` in a terminal.",
+          "Try Refresh again. If it still times out, run `verkeep-verify cursor doctor` in a terminal.",
         "invalid-json":
-          "Update the ai-verify CLI so its JSON contract matches this extension, then try Refresh again.",
+          "Update the verkeep-verify CLI so its JSON contract matches this extension, then try Refresh again.",
         "command-failed":
-          "Run `ai-verify cursor doctor` in a terminal for safe diagnostic details.",
+          "Run `verkeep-verify cursor doctor` in a terminal for safe diagnostic details.",
       };
       this._post({
         type: "error",
@@ -134,8 +134,8 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
 
     this._post({
       type: "error",
-      message: "VerAI could not load session data.",
-      fix: "Run `ai-verify cursor doctor` in a terminal, then try Refresh again.",
+      message: "Verkeep Verify could not load session data.",
+      fix: "Run `verkeep-verify cursor doctor` in a terminal, then try Refresh again.",
     });
   }
 
@@ -159,11 +159,11 @@ class SessionUsageViewProvider implements vscode.WebviewViewProvider {
     content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link href="${styleUri}" rel="stylesheet" />
-  <title>VerAI</title>
+  <title>Verkeep Verify</title>
 </head>
 <body>
   <header>
-    <h1>VerAI</h1>
+    <h1>Verkeep Verify</h1>
     <p class="tagline">看清这个会话主要用了哪些模型 · 本地计算</p>
     <button id="refresh" type="button">Refresh</button>
   </header>

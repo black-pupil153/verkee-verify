@@ -1,6 +1,6 @@
 {
   "name": "verai-cursor",
-  "displayName": "VerAI Session Usage",
+  "displayName": "Verkeep Verify Session Usage",
   "description": "See which models this Cursor session mostly used (local-only; unified call mix).",
   "version": "0.1.0",
   "publisher": "verai",
@@ -14,7 +14,9 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [
     "onView:verai.sessionView",
     "onCommand:verai.showSessionUsage",
@@ -27,7 +29,7 @@
       "activitybar": [
         {
           "id": "verai",
-          "title": "VerAI",
+          "title": "Verkeep Verify",
           "icon": "media/icon.svg"
         }
       ]
@@ -44,17 +46,17 @@
     "commands": [
       {
         "command": "verai.showSessionUsage",
-        "title": "VerAI: Show Session Usage",
+        "title": "Verkeep Verify: Show Session Usage",
         "icon": "$(graph)"
       },
       {
         "command": "verai.refresh",
-        "title": "VerAI: Refresh",
+        "title": "Verkeep Verify: Refresh",
         "icon": "$(refresh)"
       },
       {
         "command": "verai.openLatest",
-        "title": "VerAI: Open Latest Session"
+        "title": "Verkeep Verify: Open Latest Session"
       }
     ],
     "menus": {
@@ -67,12 +69,12 @@
       ]
     },
     "configuration": {
-      "title": "VerAI",
+      "title": "Verkeep Verify",
       "properties": {
         "verai.aiVerifyPath": {
           "type": "string",
-          "default": "ai-verify",
-          "description": "Path to the ai-verify CLI executable (must be on PATH or absolute)."
+          "default": "verkeep-verify",
+          "description": "Path to the verkeep-verify CLI executable (must be on PATH or absolute)."
         },
         "verai.tasksLimit": {
           "type": "number",

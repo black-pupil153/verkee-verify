@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ai_verify.cursor_logs import parse_log_line, read_log_events
+from verkeep_verify.cursor_logs import parse_log_line, read_log_events
 
 FIXTURE = Path(__file__).parent / "fixtures" / "cursor" / "structured_log_sample.log"
 

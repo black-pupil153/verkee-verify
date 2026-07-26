@@ -3,13 +3,13 @@
 > 更新日期：2026-07-13
 
 本文按用途整理仓库文件，帮助后续开发时快速定位入口、核心模块、扩展、测试和本地产物。  
-对外品牌 **VerAI**（读作 ver-eye）；包名 / CLI 仍为 `ai-verify`。
+对外品牌 **VerAI**（读作 ver-eye）；包名 / CLI 仍为 `verkeep-verify`。
 
 ## 目录概览
 
 ```text
-ai-verify/   (= VerAI 仓库根)
-├── ai_verify/                 # Python 包源码
+verkeep-verify/   (= VerAI 仓库根)
+├── verkeep_verify/                 # Python 包源码
 │   ├── alerts/                 # 报警与通知
 │   ├── blindtest/              # Cursor Auto 底层模型盲测
 │   ├── monitor/                # 验证引擎、指纹、质量题库、定时巡检
@@ -28,7 +28,7 @@ ai-verify/   (= VerAI 仓库根)
 └── .gitignore                  # 本地构建/缓存/虚拟环境忽略规则
 ```
 
-纳入 Git 的项目文件以 `git add -n ai-verify` 预览为准。完整目录中约 24k 个文件主要来自本地虚拟环境 `venv/`，属于可重建产物，不应提交。
+纳入 Git 的项目文件以 `git add -n verkeep-verify` 预览为准。完整目录中约 24k 个文件主要来自本地虚拟环境 `venv/`，属于可重建产物，不应提交。
 
 ## 根目录文件
 
@@ -38,7 +38,7 @@ ai-verify/   (= VerAI 仓库根)
 | `.envrc` | 本地开发 | 进入目录时通过 direnv 自动激活 `venv/`，不包含密钥。 |
 | `Makefile` | 开发入口 | 封装 `install`、`test`、`lint`、Cursor 导入/看板等常用命令。 |
 | `README.md` | 文档 | 用户入口，包含安装、配置、主动验证、代理、看板、监控和报警用法。 |
-| `pyproject.toml` | 配置 | Python 包元数据、依赖、可选依赖、`ai-verify` CLI 入口、Black/Ruff/Mypy/Pytest 配置。 |
+| `pyproject.toml` | 配置 | Python 包元数据、依赖、可选依赖、`verkeep-verify` CLI 入口、Black/Ruff/Mypy/Pytest 配置。 |
 | `requirements.txt` | 配置 | 运行依赖的传统 pip 清单。 |
 | `LICENSE` | 法务 | MIT License。 |
 
@@ -48,62 +48,62 @@ ai-verify/   (= VerAI 仓库根)
 
 | 文件 | 作用 |
 | --- | --- |
-| `ai_verify/__init__.py` | 包版本与作者信息。 |
-| `ai_verify/cli.py` | Click CLI 主入口；`cursor doctor|tasks|task` 支持 `--json`（扩展桥接）。 |
-| `ai_verify/config.py` | `ConfigManager`，负责 `~/.ai-verify/config.yaml` 的初始化、读取、写入和嵌套配置项管理。 |
-| `ai_verify/runner.py` | `ai-verify run -- <command>` 实现：读取上游、启动本地代理、注入环境变量、执行子进程并转发信号。 |
-| `ai_verify/dashboard.py` | 智力打分看板：运行评测、保存 `score_snapshots`、展示最新分数和趋势火花图。 |
-| `ai_verify/dashboard_cursor.py` | Cursor Auto Usage 看板：展示周期聚合、模型占比、产出占比和任务列表。 |
-| `ai_verify/report.py` | 日报/周报/月报生成：聚合打分快照和代理调用统计，输出降级/异常提示。 |
-| `ai_verify/cursor_logs.py` | 解析 Cursor structured logs / renderer logs，抽取请求、模型、trace、outcome 等事件。 |
-| `ai_verify/cursor_hook_events.py` | 读取 Cursor hook 采集的 NDJSON 事件。 |
-| `ai_verify/cursor_hooks.py` | 安装、卸载、合并和分析 Cursor hooks 配置。 |
-| `ai_verify/cursor_probe.py` | 扫描 Cursor 日志和 tracking 数据，定位模型字段与任务相关证据。 |
-| `ai_verify/cursor_recommend.py` | 基于使用数据和盲测结果生成 Cursor 模型选择建议。 |
+| `verkeep_verify/__init__.py` | 包版本与作者信息。 |
+| `verkeep_verify/cli.py` | Click CLI 主入口；`cursor doctor|tasks|task` 支持 `--json`（扩展桥接）。 |
+| `verkeep_verify/config.py` | `ConfigManager`，负责 `~/.verkeep/verify/config.yaml` 的初始化、读取、写入和嵌套配置项管理。 |
+| `verkeep_verify/runner.py` | `verkeep-verify run -- <command>` 实现：读取上游、启动本地代理、注入环境变量、执行子进程并转发信号。 |
+| `verkeep_verify/dashboard.py` | 智力打分看板：运行评测、保存 `score_snapshots`、展示最新分数和趋势火花图。 |
+| `verkeep_verify/dashboard_cursor.py` | Cursor Auto Usage 看板：展示周期聚合、模型占比、产出占比和任务列表。 |
+| `verkeep_verify/report.py` | 日报/周报/月报生成：聚合打分快照和代理调用统计，输出降级/异常提示。 |
+| `verkeep_verify/cursor_logs.py` | 解析 Cursor structured logs / renderer logs，抽取请求、模型、trace、outcome 等事件。 |
+| `verkeep_verify/cursor_hook_events.py` | 读取 Cursor hook 采集的 NDJSON 事件。 |
+| `verkeep_verify/cursor_hooks.py` | 安装、卸载、合并和分析 Cursor hooks 配置。 |
+| `verkeep_verify/cursor_probe.py` | 扫描 Cursor 日志和 tracking 数据，定位模型字段与任务相关证据。 |
+| `verkeep_verify/cursor_recommend.py` | 基于使用数据和盲测结果生成 Cursor 模型选择建议。 |
 
 ### 监控与验证
 
 | 文件 | 作用 |
 | --- | --- |
-| `ai_verify/monitor/__init__.py` | 监控模块导出入口。 |
-| `ai_verify/monitor/engine.py` | `VerifyEngine`，整合指纹识别、质量测试、安全检查、OpenAI/Anthropic/GLM 请求发送和结果展示。 |
-| `ai_verify/monitor/fingerprint.py` | `FingerprintDetector`，用反侦测探针和响应特征识别模型家族，缺少可选 ML 依赖时回退到轻量启发式。 |
-| `ai_verify/monitor/quality.py` | `QualityTester`，内置数学、逻辑、代码、知识题库和模型基准分，计算质量分与偏差。 |
-| `ai_verify/monitor/probes.py` | 中英混合探针题池，按 discriminative / behavioral / stylistic 分层。 |
-| `ai_verify/monitor/daemon.py` | 定时巡检循环，解析 `90s`、`30m`、`6h` 等间隔，周期打分并在异常时报警。 |
-| `ai_verify/monitor/cursor_usage.py` | Cursor Auto Usage 导入、证据合并、任务/周期聚合和报表渲染核心逻辑。 |
-| `ai_verify/monitor/blindtest_view.py` | 将盲测推断结果与 Cursor 任务事件对齐，生成 per-turn 推断视图。 |
+| `verkeep_verify/monitor/__init__.py` | 监控模块导出入口。 |
+| `verkeep_verify/monitor/engine.py` | `VerifyEngine`，整合指纹识别、质量测试、安全检查、OpenAI/Anthropic/GLM 请求发送和结果展示。 |
+| `verkeep_verify/monitor/fingerprint.py` | `FingerprintDetector`，用反侦测探针和响应特征识别模型家族，缺少可选 ML 依赖时回退到轻量启发式。 |
+| `verkeep_verify/monitor/quality.py` | `QualityTester`，内置数学、逻辑、代码、知识题库和模型基准分，计算质量分与偏差。 |
+| `verkeep_verify/monitor/probes.py` | 中英混合探针题池，按 discriminative / behavioral / stylistic 分层。 |
+| `verkeep_verify/monitor/daemon.py` | 定时巡检循环，解析 `90s`、`30m`、`6h` 等间隔，周期打分并在异常时报警。 |
+| `verkeep_verify/monitor/cursor_usage.py` | Cursor Auto Usage 导入、证据合并、任务/周期聚合和报表渲染核心逻辑。 |
+| `verkeep_verify/monitor/blindtest_view.py` | 将盲测推断结果与 Cursor 任务事件对齐，生成 per-turn 推断视图。 |
 
 ### Cursor 盲测
 
 | 文件 | 作用 |
 | --- | --- |
-| `ai_verify/blindtest/__init__.py` | 盲测模块导出入口。 |
-| `ai_verify/blindtest/features.py` | 文风 / 行为 / 时延（ttft+duration）/ 代码风格；通道过滤（消融）。 |
-| `ai_verify/blindtest/corpus.py` | 从 transcripts、hooks、logs、tracking DB 构建带标签语料（hook `model_id` 优先；采集 duration_ms）。 |
-| `ai_verify/blindtest/classifier.py` | 训练和运行底层模型风格分类器，支持 sklearn 与纯 Python 回退；可选 split（T 仅 val）。 |
-| `ai_verify/blindtest/splits.py` | 按 conversation_id 的 train/val/test registry 与密封标签。 |
-| `ai_verify/blindtest/eval.py` | 盲评指标、Auto 弱验证、通道消融预设与 runs 落盘。 |
+| `verkeep_verify/blindtest/__init__.py` | 盲测模块导出入口。 |
+| `verkeep_verify/blindtest/features.py` | 文风 / 行为 / 时延（ttft+duration）/ 代码风格；通道过滤（消融）。 |
+| `verkeep_verify/blindtest/corpus.py` | 从 transcripts、hooks、logs、tracking DB 构建带标签语料（hook `model_id` 优先；采集 duration_ms）。 |
+| `verkeep_verify/blindtest/classifier.py` | 训练和运行底层模型风格分类器，支持 sklearn 与纯 Python 回退；可选 split（T 仅 val）。 |
+| `verkeep_verify/blindtest/splits.py` | 按 conversation_id 的 train/val/test registry 与密封标签。 |
+| `verkeep_verify/blindtest/eval.py` | 盲评指标、Auto 弱验证、通道消融预设与 runs 落盘。 |
 
 ### 代理、存储和供应商
 
 | 文件 | 作用 |
 | --- | --- |
-| `ai_verify/proxy/__init__.py` | 代理模块导出入口。 |
-| `ai_verify/proxy/server.py` | `ProxyServer`，透明转发普通/SSE 流式请求，解析响应模型与 usage，记录 API 调用，检测模型替换、短响应、高延迟等异常。 |
-| `ai_verify/storage/__init__.py` | 存储模块导出入口。 |
-| `ai_verify/storage/database.py` | `Database`，管理 SQLite 表：`api_calls`、`quality_tests`、`anomalies`、`score_snapshots`，并提供历史、统计和打分快照读写。 |
-| `ai_verify/providers/__init__.py` | 供应商模块导出入口。 |
-| `ai_verify/providers/cc_switch.py` | 读取 CC Switch、Claude settings 或 ai-verify config，解析当前上游 `ProviderConfig`。 |
-| `ai_verify/providers/cursor.py` | 发现 Cursor 本地路径，探测 ai-tracking、logs、composer headers、agent transcripts 等数据源。 |
+| `verkeep_verify/proxy/__init__.py` | 代理模块导出入口。 |
+| `verkeep_verify/proxy/server.py` | `ProxyServer`，透明转发普通/SSE 流式请求，解析响应模型与 usage，记录 API 调用，检测模型替换、短响应、高延迟等异常。 |
+| `verkeep_verify/storage/__init__.py` | 存储模块导出入口。 |
+| `verkeep_verify/storage/database.py` | `Database`，管理 SQLite 表：`api_calls`、`quality_tests`、`anomalies`、`score_snapshots`，并提供历史、统计和打分快照读写。 |
+| `verkeep_verify/providers/__init__.py` | 供应商模块导出入口。 |
+| `verkeep_verify/providers/cc_switch.py` | 读取 CC Switch、Claude settings 或 verkeep-verify config，解析当前上游 `ProviderConfig`。 |
+| `verkeep_verify/providers/cursor.py` | 发现 Cursor 本地路径，探测 ai-tracking、logs、composer headers、agent transcripts 等数据源。 |
 
 ### 报警与通知
 
 | 文件 | 作用 |
 | --- | --- |
-| `ai_verify/alerts/__init__.py` | 报警模块导出入口。 |
-| `ai_verify/alerts/webhook.py` | `AlertManager`、`WebhookAlerter` 和 `Alert`，支持飞书、钉钉、企业微信、Slack、通用 Webhook。 |
-| `ai_verify/alerts/notify.py` | 系统通知与简单 Webhook 通知辅助函数。 |
+| `verkeep_verify/alerts/__init__.py` | 报警模块导出入口。 |
+| `verkeep_verify/alerts/webhook.py` | `AlertManager`、`WebhookAlerter` 和 `Alert`，支持飞书、钉钉、企业微信、Slack、通用 Webhook。 |
+| `verkeep_verify/alerts/notify.py` | 系统通知与简单 Webhook 通知辅助函数。 |
 
 ## 测试文件
 
@@ -147,7 +147,7 @@ ai-verify/   (= VerAI 仓库根)
 | 路径 | 作用 |
 | --- | --- |
 | `extensions/verai-cursor/` | 侧边栏 Session Usage Webview；经 CLI `--json` 读本机数据。 |
-| `extensions/verai-cursor/src/bridge.ts` | 调用 `ai-verify cursor … --json`。 |
+| `extensions/verai-cursor/src/bridge.ts` | 调用 `verkeep-verify cursor … --json`。 |
 | `extensions/verai-cursor/src/extension.ts` | 激活、命令、WebviewViewProvider。 |
 | `extensions/verai-cursor/media/` | 面板 HTML 资源（main.js / main.css / icon.svg）。 |
 | `extensions/verai-cursor/README.md` | 安装（VSIX）、PATH、隐私说明。 |
@@ -163,11 +163,11 @@ ai-verify/   (= VerAI 仓库根)
 
 ## 维护边界
 
-- 新增 CLI 命令优先放在 `ai_verify/cli.py`，复杂业务逻辑拆到对应功能模块，CLI 只做参数解析和编排；机器可读输出统一走 `--json`。
-- 与 API 调用、模型识别、质量评分相关的逻辑优先放在 `ai_verify/monitor/`。
-- 与被动流量采集相关的逻辑优先放在 `ai_verify/proxy/server.py`，持久化统一走 `ai_verify/storage/database.py`。
-- 与渠道读取相关的逻辑放在 `ai_verify/providers/`，避免把特定工具的探测逻辑塞进通用验证引擎。
-- 与 Cursor Auto Usage 相关的导入/聚合逻辑集中在 `ai_verify/monitor/cursor_usage.py`，路径发现集中在 `ai_verify/providers/cursor.py`。
-- 与盲测相关的语料、特征、分类器集中在 `ai_verify/blindtest/`，展示层放在 `ai_verify/monitor/blindtest_view.py`。
+- 新增 CLI 命令优先放在 `verkeep_verify/cli.py`，复杂业务逻辑拆到对应功能模块，CLI 只做参数解析和编排；机器可读输出统一走 `--json`。
+- 与 API 调用、模型识别、质量评分相关的逻辑优先放在 `verkeep_verify/monitor/`。
+- 与被动流量采集相关的逻辑优先放在 `verkeep_verify/proxy/server.py`，持久化统一走 `verkeep_verify/storage/database.py`。
+- 与渠道读取相关的逻辑放在 `verkeep_verify/providers/`，避免把特定工具的探测逻辑塞进通用验证引擎。
+- 与 Cursor Auto Usage 相关的导入/聚合逻辑集中在 `verkeep_verify/monitor/cursor_usage.py`，路径发现集中在 `verkeep_verify/providers/cursor.py`。
+- 与盲测相关的语料、特征、分类器集中在 `verkeep_verify/blindtest/`，展示层放在 `verkeep_verify/monitor/blindtest_view.py`。
 - 侧边栏 UI 只放在 `extensions/verai-cursor/`，不把 Node 依赖引入 Python 包。
 - 测试文件与源码模块保持对应；改动核心模块时，优先补充相邻的 `tests/test_*.py`。

@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from ai_verify.blindtest.corpus import (
+from verkeep_verify.blindtest.corpus import (
     LabelIndex,
     build_corpus,
     extract_turns,
@@ -343,7 +343,7 @@ def test_corpus_save_load_roundtrip(tmp_path):
 
 def test_task_fingerprint_collision_skips_ambiguous():
     idx = LabelIndex()
-    prompt = "You are generating ground-truth Cursor usage for VerAI blindtest (APP-12). " + (
+    prompt = "You are generating ground-truth Cursor usage for Verkeep Verify blindtest (APP-12). " + (
         "x" * 40
     )
     fp = task_fingerprint(prompt)
@@ -362,7 +362,7 @@ def test_conversation_overrides_win_over_mislabel(tmp_path):
         "subagent-a",
         [
             (
-                "You are generating ground-truth Cursor usage for VerAI blindtest (APP-12). "
+                "You are generating ground-truth Cursor usage for Verkeep Verify blindtest (APP-12). "
                 + ("explain inventory gaps " * 8),
                 [{"text": "answer"}],
             )

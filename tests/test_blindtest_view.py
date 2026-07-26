@@ -17,10 +17,10 @@ from datetime import datetime, timedelta
 import pytest
 from click.testing import CliRunner
 
-from ai_verify.cli import cursor_task
-from ai_verify.monitor.blindtest_view import InferredView, get_inferred_view
-from ai_verify.monitor.cursor_usage import aggregate_task
-from ai_verify.storage.database import Database
+from verkeep_verify.cli import cursor_task
+from verkeep_verify.monitor.blindtest_view import InferredView, get_inferred_view
+from verkeep_verify.monitor.cursor_usage import aggregate_task
+from verkeep_verify.storage.database import Database
 
 
 # ─── helpers ────────────────────────────────────────────────────────────────
@@ -334,7 +334,7 @@ def test_cli_cursor_task_inferred_smoke(db, tmp_path, monkeypatch):
     )
 
     # Patch Database to return our tmp db regardless of db_path arg
-    import ai_verify.storage.database as db_module
+    import verkeep_verify.storage.database as db_module
 
     original_cls = db_module.Database
 
@@ -358,7 +358,7 @@ def test_cli_cursor_task_inferred_no_model_no_record(db, monkeypatch):
     """--inferred with no stored inferences and no model file prints graceful message."""
     _seed_factual_events(db, TASK_ID)
 
-    import ai_verify.storage.database as db_module
+    import verkeep_verify.storage.database as db_module
 
     class _PatchedDB(Database):
         def __init__(self, db_path=None):

@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="media/app-icon-128.png" alt="VerAI" width="96" />
+  <img src="media/app-icon-128.png" alt="Verkeep Verify" width="96" />
 </p>
 
-# VerAI Cursor Extension
+# Verkeep Verify Cursor Extension（原 VerAI）
 
-**VerAI（读 ver-eye）**：本地看清 Cursor 这次会话主要用了哪些模型。不上传对话正文。
+**守真·验 Verkeep Verify**：本地看清 Cursor 这次会话主要用了哪些模型。不上传对话正文。
 
 侧边栏展示当前/最近会话的统一调用次数构成；确认/估算拆分在折叠细则里，不占默认主视图。
 
@@ -16,23 +16,23 @@
 
 - Cursor 或 VS Code 1.85+
 - Python 3.9+
-- 本机安装 VerAI CLI
+- 本机安装 Verkeep Verify CLI
 
 ```bash
-# 在 VerAI 仓库的 ai-verify 目录执行
+# 在 verkeep-verify 仓库根目录执行
 python -m pip install --upgrade pip
 pip install -e .
-command -v ai-verify
-ai-verify cursor doctor
+command -v verkeep-verify
+verkeep-verify cursor doctor
 ```
 
-Windows 可用 `where ai-verify` 查找路径。如果终端能运行 CLI、Cursor
-里仍提示找不到，请打开 Settings，搜索 `VerAI: AI Verify Path`，填入
-`ai-verify` 可执行文件的绝对路径；也可以直接编辑设置：
+Windows 可用 `where verkeep-verify` 查找路径。如果终端能运行 CLI、Cursor
+里仍提示找不到，请打开 Settings，搜索 `verai.aiVerifyPath`，填入
+`verkeep-verify` 可执行文件的绝对路径；也可以直接编辑设置：
 
 ```json
 {
-  "verai.aiVerifyPath": "/absolute/path/to/ai-verify"
+  "verai.aiVerifyPath": "/absolute/path/to/verkeep-verify"
 }
 ```
 
@@ -43,7 +43,7 @@ Windows 可用 `where ai-verify` 查找路径。如果终端能运行 CLI、Curs
 2. 在 Cursor 打开 Extensions。
 3. 点击右上角 `⋯` → **Install from VSIX…**。
 4. 选择 `.vsix`，安装完成后按提示 Reload Window。
-5. 点击 Activity Bar 中的 **VerAI** 图标。
+5. 点击 Activity Bar 中的 **Verkeep Verify** 图标。
 
 也可以使用 Cursor CLI，并用实际 VSIX 路径替换示例：
 
@@ -57,20 +57,20 @@ cursor --install-extension ./verai-cursor-0.1.0.vsix
 建议主动扫描最近 7 天，避免近期没有会话时面板为空：
 
 ```bash
-ai-verify cursor doctor
-ai-verify cursor import --since 7d
-ai-verify cursor task --latest --json
+verkeep-verify cursor doctor
+verkeep-verify cursor import --since 7d
+verkeep-verify cursor task --latest --json
 ```
 
 **可选但推荐**：安装 Cursor hooks，提高 Auto 会话的事实覆盖（仍非云端逐步真名）：
 
 ```bash
-ai-verify cursor hooks install
+verkeep-verify cursor hooks install
 ```
 
-安装后新开或继续会话，再点侧边栏 Refresh。卸载用 `ai-verify cursor hooks uninstall`。
+安装后新开或继续会话，再点侧边栏 Refresh。卸载用 `verkeep-verify cursor hooks uninstall`。
 
-随后打开 VerAI 侧边栏。正常情况下 5 秒内应看懂「哪个模型用得最多」。
+随后打开 Verkeep Verify 侧边栏。正常情况下 5 秒内应看懂「哪个模型用得最多」。
 若没有数据，面板会显示正常空状态；若 CLI、PATH 或 JSON 契约异常，面板会
 给出对应修复提示。
 
@@ -80,7 +80,7 @@ ai-verify cursor hooks install
 2. 在终端运行：
 
    ```bash
-   ai-verify cursor task --latest --json
+   verkeep-verify cursor task --latest --json
    ```
 
 3. 优先对照 `model_mix_v2`（`total_calls`、各模型 `call_count` / `pct`）。
@@ -94,12 +94,12 @@ ai-verify cursor hooks install
 | 状态 | 处理方式 |
 |------|----------|
 | CLI not found | 设置 `verai.aiVerifyPath` 为绝对路径 |
-| doctor needs fix | 在终端运行 `ai-verify cursor doctor` 并按 suggestion 修复核心数据源 |
+| doctor needs fix | 在终端运行 `verkeep-verify cursor doctor` 并按 suggestion 修复核心数据源 |
 | doctor green · N warnings | 可选源（如 proxy supplement）缺失；占比仍可加载 |
-| invalid JSON | 更新本地 VerAI CLI，使版本与插件匹配 |
+| invalid JSON | 更新本地 Verkeep Verify CLI，使版本与插件匹配 |
 | import warning | 面板会继续展示缓存；在终端运行 import 查看详情 |
-| No recent sessions | 执行 `ai-verify cursor import --since 7d` 扩大时间范围 |
-| 大量「未识别」 | 试 `ai-verify cursor hooks install` 后新开会话；Refresh 再看 |
+| No recent sessions | 执行 `verkeep-verify cursor import --since 7d` 扩大时间范围 |
+| 大量「未识别」 | 试 `verkeep-verify cursor hooks install` 后新开会话；Refresh 再看 |
 
 ## 开发与打包
 
@@ -107,26 +107,26 @@ ai-verify cursor hooks install
 cd extensions/verai-cursor
 npm install
 npm test
-# A3 验收：侧边栏字段 ≡ CLI --json（需本机 ai-verify + Cursor 数据）
+# A3 验收：侧边栏字段 ≡ CLI --json（需本机 verkeep-verify + Cursor 数据）
 npm run accept
 npm run package
 ```
 
 `npm run package` 会先编译，再执行 `vsce package --no-dependencies`，产出
 `verai-cursor-0.1.0.vsix`。`npm run accept` 用 bridge 拉 latest，再对同一
-`task_id` 跑 `ai-verify cursor task <id> --json`，核对 `model_mix_v2` 与
+`task_id` 跑 `verkeep-verify cursor task <id> --json`，核对 `model_mix_v2` 与
 legacy 分轨字段；预算 10 秒（可设 `VERAI_AI_VERIFY_PATH`）。
 
 ## 命令
 
 | 命令 | 作用 |
 |------|------|
-| VerAI: Show Session Usage | 打开/刷新侧边栏 |
-| VerAI: Refresh | 重新拉 doctor + tasks + latest |
-| VerAI: Open Latest Session | 加载最近任务占比 |
+| Verkeep Verify: Show Session Usage | 打开/刷新侧边栏 |
+| Verkeep Verify: Refresh | 重新拉 doctor + tasks + latest |
+| Verkeep Verify: Open Latest Session | 加载最近任务占比 |
 
 ## 隐私
 
-- 只读本机 `~/.ai-verify` 与 Cursor 遥测元数据
+- 只读本机 `~/.verkeep/verify` 与 Cursor 遥测元数据
 - 面板不展示 prompt/response 正文
 - 估算来源仅在折叠细则中展示，不得当作官方逐步真名

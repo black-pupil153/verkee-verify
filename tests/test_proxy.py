@@ -1,6 +1,6 @@
 """代理服务器测试（不依赖真实网络）"""
 
-from ai_verify.proxy.server import ProxyServer
+from verkeep_verify.proxy.server import ProxyServer
 
 
 def _server():

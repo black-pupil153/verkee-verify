@@ -31,7 +31,7 @@ window.addEventListener("message", (event) => {
     el.status.textContent = msg.message || "Error";
     const action =
       msg.fixAction === "openSettings"
-        ? `<p><button type="button" id="open-settings">Open VerAI Settings</button></p>`
+        ? `<p><button type="button" id="open-settings">Open Verkeep Verify Settings</button></p>`
         : "";
     el.doctor.innerHTML = `
       ${msg.fix ? `<p class="fix">${escapeHtml(msg.fix)}</p>` : ""}
@@ -79,8 +79,8 @@ function renderDoctor(data) {
   const failedNames = blocking.map((c) => c.name);
   const warningNames = warnings.map((c) => c.name);
   const fixHint = !data.ok
-    ? `<p class="fix">Run <code>ai-verify cursor doctor</code> in a terminal, then Refresh. If CLI is missing, set <code>verai.aiVerifyPath</code>.</p>
-       <p><button type="button" id="open-settings">Open VerAI Settings</button></p>`
+    ? `<p class="fix">Run <code>verkeep-verify cursor doctor</code> in a terminal, then Refresh. If CLI is missing, set <code>verai.aiVerifyPath</code>.</p>
+       <p><button type="button" id="open-settings">Open Verkeep Verify Settings</button></p>`
     : "";
   el.doctor.innerHTML = `
     <div class="pill ${pillClass}">${escapeHtml(pillLabel)}</div>
@@ -106,7 +106,7 @@ function renderDoctor(data) {
 
 function renderTasks(tasks) {
   if (!tasks.length) {
-    el.tasks.innerHTML = `<p class="muted">No recent sessions found. VerAI already tried a background import; use <code>ai-verify cursor import --since 7d</code> to scan a wider window.</p>`;
+    el.tasks.innerHTML = `<p class="muted">No recent sessions found. Verkeep Verify already tried a background import; use <code>verkeep-verify cursor import --since 7d</code> to scan a wider window.</p>`;
     return;
   }
   el.tasks.innerHTML = `

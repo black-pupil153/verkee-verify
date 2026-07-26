@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ai_verify.providers.cursor import (
+from verkeep_verify.providers.cursor import (
     discover_cursor_paths,
     header_display_title,
     load_composer_headers,
@@ -27,9 +27,9 @@ def test_discover_cursor_paths_defaults(tmp_path, monkeypatch):
     (logs / "Cursor Structured Logs.log").write_text("line\n")
     (cursor_home / "projects").mkdir(parents=True)
 
-    monkeypatch.setattr("ai_verify.providers.cursor._cursor_home", lambda: cursor_home)
+    monkeypatch.setattr("verkeep_verify.providers.cursor._cursor_home", lambda: cursor_home)
     monkeypatch.setattr(
-        "ai_verify.providers.cursor._cursor_app_support", lambda: app_support
+        "verkeep_verify.providers.cursor._cursor_app_support", lambda: app_support
     )
 
     paths = discover_cursor_paths()
@@ -122,12 +122,12 @@ def test_run_doctor_minimal(tmp_path, monkeypatch):
     logs = app_support / "logs"
     logs.mkdir(parents=True)
 
-    monkeypatch.setattr("ai_verify.providers.cursor._cursor_home", lambda: cursor_home)
+    monkeypatch.setattr("verkeep_verify.providers.cursor._cursor_home", lambda: cursor_home)
     monkeypatch.setattr(
-        "ai_verify.providers.cursor._cursor_app_support", lambda: app_support
+        "verkeep_verify.providers.cursor._cursor_app_support", lambda: app_support
     )
 
-    report = run_doctor(ai_verify_db=tmp_path / "missing.db")
+    report = run_doctor(verkeep_verify_db=tmp_path / "missing.db")
     names = [c.name for c in report.checks]
     assert "ai-tracking.db" in names
     proxy = next(c for c in report.checks if c.name == "proxy supplement")
@@ -139,7 +139,7 @@ def test_run_doctor_minimal(tmp_path, monkeypatch):
     assert report.required_ok == all(c.ok for c in required)
     assert report.to_dict()["ok"] == report.required_ok
     assert any(w["name"] == "proxy supplement" for w in report.to_dict()["warnings"])
-    assert report.suggestion.startswith("ai-verify cursor import")
+    assert report.suggestion.startswith("verkeep-verify cursor import")
 
 
 def test_run_doctor_optional_proxy_does_not_fail_when_core_ok(tmp_path, monkeypatch):
@@ -175,12 +175,12 @@ def test_run_doctor_optional_proxy_does_not_fail_when_core_ok(tmp_path, monkeypa
     projects.mkdir(parents=True)
     (projects / "transcript.jsonl").write_text("{}\n")
 
-    monkeypatch.setattr("ai_verify.providers.cursor._cursor_home", lambda: cursor_home)
+    monkeypatch.setattr("verkeep_verify.providers.cursor._cursor_home", lambda: cursor_home)
     monkeypatch.setattr(
-        "ai_verify.providers.cursor._cursor_app_support", lambda: app_support
+        "verkeep_verify.providers.cursor._cursor_app_support", lambda: app_support
     )
 
-    report = run_doctor(ai_verify_db=tmp_path / "missing.db")
+    report = run_doctor(verkeep_verify_db=tmp_path / "missing.db")
     payload = report.to_dict()
     assert payload["ok"] is True
     assert any(w["name"] == "proxy supplement" for w in payload["warnings"])

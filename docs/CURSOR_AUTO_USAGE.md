@@ -38,7 +38,7 @@
 ### 1.2 与现有能力的关系
 
 ```
-ai-verify
+verkeep-verify
 ├── CC Switch 质量测评     ← 已有：测中转源真假/质量
 ├── Proxy 被动监控         ← 已有：拦截 OpenAI/Anthropic 兼容 API
 └── Cursor Auto Usage      ← 新增：透视 Cursor 内置路由（独立模块）
@@ -250,7 +250,7 @@ def merge_turn(request_id, task_id, sources):
 ## 5. 模块与文件结构
 
 ```
-ai_verify/
+verkeep_verify/
 ├── providers/
 │   └── cursor.py              # 路径探测、schema 探测、平台适配（只读）
 ├── monitor/
@@ -366,27 +366,27 @@ CREATE TABLE IF NOT EXISTS cursor_import_state (
 
 ```bash
 # P0：环境探测
-ai-verify cursor doctor
+verkeep-verify cursor doctor
 
 # P1：导入
-ai-verify cursor import [--since 7d] [--full]
+verkeep-verify cursor import [--since 7d] [--full]
 
 # P1：列表
-ai-verify cursor tasks [--since 7d] [--limit 20] [--auto-only]
+verkeep-verify cursor tasks [--since 7d] [--limit 20] [--auto-only]
 
 # P1：单任务详情（核心）
-ai-verify cursor task <task_id>
-ai-verify cursor task --latest
-ai-verify cursor task --search "ai-verify"
+verkeep-verify cursor task <task_id>
+verkeep-verify cursor task --latest
+verkeep-verify cursor task --search "verkeep-verify"
 
 # P2：看板
-ai-verify cursor board [--watch]
+verkeep-verify cursor board [--watch]
 
 # P2：周报
-ai-verify cursor report --period weekly
+verkeep-verify cursor report --period weekly
 
 # P3：质量关联
-ai-verify cursor task <task_id> --score
+verkeep-verify cursor task <task_id> --score
 ```
 
 ### 7.1 `cursor doctor` 输出示例
@@ -407,7 +407,7 @@ Cursor Auto Usage — 环境诊断
   outcome/ttft (med)       via agent.turn.outcome
   tokens (unknown)         not found in local logs
 
-建议: ai-verify cursor import --since 7d
+建议: verkeep-verify cursor import --since 7d
 ```
 
 ### 7.2 `cursor tasks` 输出示例
@@ -511,9 +511,9 @@ flowchart TD
 **验收**：
 
 ```bash
-ai-verify cursor doctor
-ai-verify cursor import --since 7d
-ai-verify cursor task 906dea0f-be35-471a-a97e-df528b6b9090
+verkeep-verify cursor doctor
+verkeep-verify cursor import --since 7d
+verkeep-verify cursor task 906dea0f-be35-471a-a97e-df528b6b9090
 # 产出占比应接近 claude-fable-5 64% / grok-4.5 36%
 ```
 
@@ -541,13 +541,13 @@ ai-verify cursor task 906dea0f-be35-471a-a97e-df528b6b9090
 {
   "version": 1,
   "hooks": {
-    "afterAgentResponse": [{ "command": "~/.ai-verify/hooks/cursor-track.sh" }],
-    "subagentStop": [{ "command": "~/.ai-verify/hooks/cursor-track.sh" }]
+    "afterAgentResponse": [{ "command": "~/.verkeep/verify/hooks/cursor-track.sh" }],
+    "subagentStop": [{ "command": "~/.verkeep/verify/hooks/cursor-track.sh" }]
   }
 }
 ```
 
-Hook 脚本 append 到 `~/.ai-verify/cursor-hook-probe.ndjson`，`import` 时作为 `event_source=hook` 合并。  
+Hook 脚本 append 到 `~/.verkeep/verify/cursor-hook-probe.ndjson`，`import` 时作为 `event_source=hook` 合并。  
 **本机已验证**：hook stdin 含 `model` / `model_id` / `subagent_model`；`subagent_id` 偶发带引号与嵌入换行，导入侧用 `normalize_cursor_id` 清洗，且子任务不进入顶层 `cursor tasks` 列表。
 
 ---
@@ -555,7 +555,7 @@ Hook 脚本 append 到 `~/.ai-verify/cursor-hook-probe.ndjson`，`import` 时作
 ### P3：质量关联（1–2 天）— **部分完成**
 
 ```bash
-ai-verify cursor task <id> --score
+verkeep-verify cursor task <id> --score
 ```
 
 对该 task 出现过的 `resolved_model` 列表：
@@ -599,10 +599,10 @@ CLI `--score` 与 `get_model_scores()` 已有；完整 VerifyEngine 按模型补
 pytest tests/test_cursor_paths.py tests/test_cursor_logs.py tests/test_cursor_usage.py -v
 
 # 本机集成验证
-ai-verify cursor doctor
-ai-verify cursor import --since 30d
-ai-verify cursor tasks --limit 5
-ai-verify cursor task --latest
+verkeep-verify cursor doctor
+verkeep-verify cursor import --since 30d
+verkeep-verify cursor tasks --limit 5
+verkeep-verify cursor task --latest
 ```
 
 **回归**：确保现有 `pytest` 全绿，不破坏 cc-switch / proxy 测试。
@@ -627,10 +627,10 @@ ai-verify cursor task --latest
 按顺序执行；**不要**从零重建 P0/P1 模块：
 
 ```
-1. ai-verify cursor doctor
-2. ai-verify cursor import --since 30d [--full]
-3. ai-verify cursor tasks --limit 5
-4. ai-verify cursor task --latest
+1. verkeep-verify cursor doctor
+2. verkeep-verify cursor import --since 30d [--full]
+3. verkeep-verify cursor tasks --limit 5
+4. verkeep-verify cursor task --latest
 5. 对照已知任务（如 906dea0f）检查产出占比
 6. 若解析/合并异常：修 providers/cursor.py / cursor_logs.py / cursor_usage.py
 7. 补脱敏夹具 + pytest；回归：pytest -q tests -k "not ml_optional"
@@ -656,7 +656,7 @@ Cursor Auto     →  「Cursor 背着我用了哪些模型？值不值？」
 ```text
 先阅读 docs/PROJECT_STATUS.md、README.md 和 docs/CURSOR_AUTO_USAGE.md。
 不要重做 Cursor P0/P1：代码和测试已经存在。
-先在本机运行 ai-verify cursor doctor、cursor import --since 30d、cursor tasks --limit 5、cursor task --latest，
+先在本机运行 verkeep-verify cursor doctor、cursor import --since 30d、cursor tasks --limit 5、cursor task --latest，
 根据真实输出补齐问题、测试与文档；保持 confidence/unknown 和隐私边界。
 回归使用：venv/bin/python -m pytest -q tests -k "not ml_optional"。
 ```

@@ -8,16 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from ai_verify.blindtest.classifier import BlindModelClassifier
-from ai_verify.blindtest.corpus import Corpus, CorpusSample, exclude_conversations
-from ai_verify.blindtest.eval import (
+from verkeep_verify.blindtest.classifier import BlindModelClassifier
+from verkeep_verify.blindtest.corpus import Corpus, CorpusSample, exclude_conversations
+from verkeep_verify.blindtest.eval import (
     evaluate_classifier,
     expected_calibration_error,
     new_run_dir,
     save_run_artifacts,
 )
-from ai_verify.blindtest.features import TurnRecord, extract_features
-from ai_verify.blindtest.splits import (
+from verkeep_verify.blindtest.features import TurnRecord, extract_features
+from verkeep_verify.blindtest.splits import (
     assert_no_test_labels,
     create_split,
     extract_sealed_labels,
@@ -229,10 +229,10 @@ def test_train_rejects_leaked_test_labels():
 
 
 def test_run_artifacts_no_prompt_text(tmp_path: Path, monkeypatch):
-    from ai_verify.blindtest.splits import SealedLabel
+    from verkeep_verify.blindtest.splits import SealedLabel
 
     monkeypatch.setattr(
-        "ai_verify.blindtest.eval.DEFAULT_BLINDTEST_DIR", tmp_path
+        "verkeep_verify.blindtest.eval.DEFAULT_BLINDTEST_DIR", tmp_path
     )
     corpus = _build_corpus()
     split = create_split(corpus, name="run", seed=1)
@@ -281,7 +281,7 @@ def test_ece_basic():
 def test_auto_eval_agree_and_opaque():
     from types import SimpleNamespace
 
-    from ai_verify.blindtest.eval import evaluate_auto_reports
+    from verkeep_verify.blindtest.eval import evaluate_auto_reports
 
     reports = [
         SimpleNamespace(
@@ -317,7 +317,7 @@ def test_auto_eval_agree_and_opaque():
 
 
 def test_apply_channels_drops_latency():
-    from ai_verify.blindtest.eval import apply_channels_to_samples
+    from verkeep_verify.blindtest.eval import apply_channels_to_samples
 
     corpus = _build_corpus(n_convs_per_class=2, turns_per_conv=2)
     filtered = apply_channels_to_samples(corpus.samples, ["text", "code"])
@@ -328,11 +328,11 @@ def test_apply_channels_drops_latency():
 
 
 def test_near_gate_eval_matches_predict_and_swap_metric():
-    from ai_verify.blindtest.classifier import (
+    from verkeep_verify.blindtest.classifier import (
         ABSTAIN_NEAR_MARGIN,
         select_inferred_model,
     )
-    from ai_verify.blindtest.eval import evaluate_predictions
+    from verkeep_verify.blindtest.eval import evaluate_predictions
 
     sol = "gpt-5.6-sol-medium"
     terra = "gpt-5.6-terra-medium"

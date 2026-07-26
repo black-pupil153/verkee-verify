@@ -3,7 +3,7 @@
 VENV := ./venv
 PY   := $(VENV)/bin/python
 PIP  := $(VENV)/bin/pip
-AV   := $(VENV)/bin/ai-verify
+AV   := $(VENV)/bin/verkeep-verify
 
 install:
 	@test -d $(VENV) || python3 -m venv $(VENV)
@@ -24,5 +24,5 @@ test:
 	$(VENV)/bin/pytest -q
 
 lint:
-	$(VENV)/bin/ruff check ai_verify/
-	$(VENV)/bin/black --check ai_verify/
+	$(VENV)/bin/ruff check verkeep_verify/
+	$(VENV)/bin/black --check verkeep_verify/

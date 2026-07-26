@@ -1,27 +1,28 @@
-# VerAI alpha brand assets
+# 守真·验 Verkeep Verify 品牌素材
 
-> **VerAI（读 ver-eye）**：本地看清 Cursor 这次会话主要用了哪些模型。不上传对话正文。
+本目录为「守真 / Verkeep」品牌家族素材目录。
 
-- 中文 tagline：看清这次会话，用了哪些模型。
-- English tagline: See which models this session used.
-- 图形：眼形表示“看清”，内部 V 同时像验真勾。
-- 主色：冷青 `#62C8BC`；中性底 `#111820`；浅色 `#E7EFEE`。
-- App icon 使用深色满版底；不要自行加渐变、发光、阴影或文字。
-- Activity Bar 只用 `currentColor`；不得加入第二种颜色或小于 1px 的线。
-- 深色界面用浅色轮廓；浅色界面使用 `logo/verai-mark.svg` 的默认配色。
-- 社交图底部保留了可叠加二维码或链接的空区。
-- 禁用风格：紫渐变、赛博霓虹、机器人脸、复杂仪表盘。
-- SVG 是源文件；PNG 只从同名 SVG 导出，不在位图上二次修改。
+## 状态
 
-目录：`logo/` 为主标与字标，`app/` 为应用图标，`ide/` 为单色侧栏图标，`social/` 为传播图。
+旧 **VerAI** 品牌素材（主标、字标、应用图标、侧栏图标、moments 海报、GitHub OG 图等）
+已全部归档至 [`legacy-verai/`](legacy-verai/)，**仅作历史存档，不再代表当前品牌**。
 
-## 仓库里放什么
+VerAI 品牌已被「守真 / Verkeep」品牌家族取代：
 
-本目录是**已定稿的产品脸**（体积小），会进 git，供 README / 扩展引用：
+- 守真·验 Verkeep Verify（原 VerAI，AI 消费验真器，本仓库）
+- 守真·卫 Verkeep Guard（原 AgentGuard，AI Agent 行为管控工具）
 
-- `social/github-og-1280x640.png` → 仓库 README 头图
-- `logo/*.svg` → README lockup
-- `ide/activity-bar.svg` → 拷到 `extensions/verai-cursor/media/icon.svg`
-- `app/icon-128.png` → 扩展 `package.json` `icon`
+新品牌气质：火绒式安静精准、本地优先、开源可信、证据至上。
 
-ChatGPT 多轮废稿、PSD、未压缩超大原图：**不要**丢进本目录。
+新品牌配色体系：
+
+| 色名 | 色值 |
+|------|------|
+| 洞察蓝 | `#1D4FD7` |
+| 界绿 | `#0E7A5F` |
+| 闸琥珀 | `#F2A93B` |
+| 朱砂 | `#C93A22` |
+| 墨蓝 | `#101E3D` |
+
+守真·验的新版 logo / 图标素材尚未落定；落定前，扩展与 README 暂沿用
+`legacy-verai/` 中的旧图（过渡期安排，不代表新品牌视觉）。

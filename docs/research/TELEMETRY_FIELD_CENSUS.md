@@ -50,7 +50,7 @@
 - **无** `model` / `catalogModelId` / `resolvedModel` 字段
 - 仅 ~40% 有 subtitle；与 agent-transcript `conversationId` 常不对齐 → 标题缺失属预期
 
-## 4. Hooks（`~/.ai-verify/cursor-hook-probe.ndjson`）
+## 4. Hooks（`~/.verkeep/verify/cursor-hook-probe.ndjson`）
 
 本机 16 条事件字段普查（高频）：
 
@@ -75,7 +75,7 @@ Token 字段已存在 → 实现阶段应优先从 hook 填 `input_tokens`/`outp
 
 ## 5. Structured / renderer logs（VerAI 已解析契约）
 
-依据 [`cursor_logs.py`](../../ai_verify/cursor_logs.py) 与设计文档（本机 parser 已覆盖）：
+依据 [`cursor_logs.py`](../../verkeep_verify/cursor_logs.py) 与设计文档（本机 parser 已覆盖）：
 
 | 事件/来源 | 模型相关字段 | Auto 时典型值 | 置信度 |
 |-----------|--------------|---------------|--------|

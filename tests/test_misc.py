@@ -1,7 +1,7 @@
 """守护进程与看板辅助函数测试"""
 
-from ai_verify.monitor.daemon import parse_interval
-from ai_verify.dashboard import _sparkline, _score_color
+from verkeep_verify.monitor.daemon import parse_interval
+from verkeep_verify.dashboard import _sparkline, _score_color
 
 
 def test_parse_interval_units():

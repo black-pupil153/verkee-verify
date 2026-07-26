@@ -1,8 +1,8 @@
 /**
- * A3 acceptance: bridge task payload ≡ `ai-verify cursor task --json`
+ * A3 acceptance: bridge task payload ≡ `verkeep-verify cursor task --json`
  * within 10 seconds (same fields the sidebar renders).
  *
- * Skips when ai-verify is not on PATH / configured, so CI without Cursor data
+ * Skips when verkeep-verify is not on PATH / configured, so CI without Cursor data
  * still passes unit tests via `npm test`.
  */
 const assert = require("node:assert/strict");
@@ -14,7 +14,7 @@ const { AiVerifyBridge } = require("../out/bridge");
 const execFileAsync = promisify(execFile);
 
 function resolveCli() {
-  return process.env.VERAI_AI_VERIFY_PATH || "ai-verify";
+  return process.env.VERAI_AI_VERIFY_PATH || "verkeep-verify";
 }
 
 async function cliAvailable(cli) {
@@ -61,7 +61,7 @@ function mixFingerprint(mix) {
 test("sidebar parity: bridge task ≡ cursor task --json (<10s)", async (t) => {
   const cli = resolveCli();
   if (!(await cliAvailable(cli))) {
-    t.skip(`ai-verify not available (${cli}); set VERAI_AI_VERIFY_PATH to run`);
+    t.skip(`verkeep-verify not available (${cli}); set VERAI_AI_VERIFY_PATH to run`);
     return;
   }
 
@@ -128,7 +128,7 @@ test("sidebar parity: bridge task ≡ cursor task --json (<10s)", async (t) => {
 test("silent import --since 1d is callable via bridge", async (t) => {
   const cli = resolveCli();
   if (!(await cliAvailable(cli))) {
-    t.skip(`ai-verify not available (${cli})`);
+    t.skip(`verkeep-verify not available (${cli})`);
     return;
   }
   const bridge = new AiVerifyBridge(() => cli);

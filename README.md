@@ -20,6 +20,7 @@
 ## 安装
 
 ```bash
+git clone https://github.com/black-pupil153/verkee-verify.git
 cd verkee-verify
 python -m venv venv
 source venv/bin/activate
@@ -91,6 +92,7 @@ verkee-verify alert test
 ### 1. 安装 CLI
 
 ```bash
+git clone https://github.com/black-pupil153/verkee-verify.git
 cd verkee-verify
 python -m venv venv
 source venv/bin/activate
@@ -125,7 +127,7 @@ verkee-verify cursor task --latest --json   # 插件契约（含 model_mix_v2）
 ```
 
 只读本机元数据（不读 prompt/response 正文）。推断 ≠ Cursor 官方逐步真名，且不得写入 `resolved_model`。  
-设计细节：[`docs/CURSOR_AUTO_USAGE.md`](docs/CURSOR_AUTO_USAGE.md) · 路线图：[`docs/ROADMAP.md`](docs/ROADMAP.md)
+设计细节：[`docs/CURSOR_AUTO_USAGE.md`](docs/CURSOR_AUTO_USAGE.md)
 
 ## 配置与数据
 
@@ -142,9 +144,9 @@ ruff check verkee_verify/
 python -m build
 ```
 
-文件职责索引：[`docs/FILE_INVENTORY.md`](docs/FILE_INVENTORY.md)  
-阶段交接：[`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md)  
-产品路线图：[`docs/ROADMAP.md`](docs/ROADMAP.md)
+## 反馈
+
+内测阶段，问题与建议欢迎提 [GitHub Issues](https://github.com/black-pupil153/verkee-verify/issues)。
 
 ## License
 

@@ -4,7 +4,7 @@
 
 同一仓库也保留 AI 渠道验真能力：以**被动监控为主、主动探测为辅**，检测中转站偷换模型、质量下滑与官方模型降智。
 
-仓库：<https://github.com/black-pupil153/VerAI> · 侧边栏软发布：[v0.1.0-sidebar](https://github.com/black-pupil153/VerAI/releases/tag/v0.1.0-sidebar)
+仓库：<https://github.com/black-pupil153/verkee-verify> · 侧边栏软发布：[v0.1.0-sidebar](https://github.com/black-pupil153/verkee-verify/releases/tag/v0.1.0-sidebar)
 
 ## 核心能力
 
@@ -100,7 +100,7 @@ verkee-verify cursor doctor
 
 ### 2. 安装扩展（Install from VSIX）
 
-1. 从 [GitHub Releases](https://github.com/black-pupil153/VerAI/releases) 下载 `verai-cursor-0.1.0.vsix`  
+1. 从 [GitHub Releases](https://github.com/black-pupil153/verkee-verify/releases) 下载 `verai-cursor-0.1.0.vsix`  
    （或本机构建：`cd extensions/verai-cursor && npm run package`）
 2. Cursor → Extensions → `⋯` → **Install from VSIX…** → 选中文件 → Reload
 3. Activity Bar 打开 **Verkee Verify**；无数据时先：

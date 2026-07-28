@@ -52,10 +52,10 @@ dev = [
 verkee-verify = "verkee_verify.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ai-verify-cli/ai-verify"
-Documentation = "https://github.com/ai-verify-cli/ai-verify#readme"
-Repository = "https://github.com/ai-verify-cli/ai-verify"
-Issues = "https://github.com/ai-verify-cli/ai-verify/issues"
+Homepage = "https://verkee.com"
+Documentation = "https://github.com/black-pupil153/verkee-verify#readme"
+Repository = "https://github.com/black-pupil153/verkee-verify"
+Issues = "https://github.com/black-pupil153/verkee-verify/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["verkee_verify"]
